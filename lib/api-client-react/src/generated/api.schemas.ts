@@ -155,6 +155,7 @@ export interface TemplateUpdate {
 
 export interface Attachment {
   id: number;
+  userId: number;
   name: string;
   filename: string;
   mimeType: string;
@@ -163,6 +164,7 @@ export interface Attachment {
 }
 
 export interface AttachmentInput {
+  userId: number;
   name: string;
   filename: string;
   mimeType: string;
@@ -283,6 +285,10 @@ export interface EmailError {
   canRetry?: boolean;
   createdAt: string;
 }
+
+export type ListAttachmentsParams = {
+userId: number;
+};
 
 export type ListEmailHistoryParams = {
 /**

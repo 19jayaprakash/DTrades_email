@@ -25,7 +25,7 @@ export default function History() {
   const handleRetry = async (id: number) => {
     setRetryingId(id);
     try {
-      await retryMutation.mutateAsync({ data: { emailHistoryId: id } });
+      await retryMutation.mutateAsync({ id });
       toast({ title: "Email added to retry queue" });
       queryClient.invalidateQueries({ queryKey: getListEmailHistoryQueryKey({ page, limit: 20 }) });
     } catch (e) {

@@ -7,6 +7,7 @@
  */
 
 export interface AttachmentInput {
+  userId: number;
   name: string;
   filename: string;
   mimeType: string;

@@ -35,6 +35,7 @@ import type {
   ErrorResponse,
   GetDailyActivityParams,
   HealthStatus,
+  ListAttachmentsParams,
   ListEmailHistoryParams,
   ListErrorsParams,
   LoginInput,
@@ -1458,20 +1459,27 @@ export const useDeleteTemplate = <TError = ErrorType<unknown>,
       return useMutation(getDeleteTemplateMutationOptions(options));
     }
 
-export const getListAttachmentsUrl = () => {
+export const getListAttachmentsUrl = (params: ListAttachmentsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/attachments`
+  return stringifiedParams.length > 0 ? `/api/attachments?${stringifiedParams}` : `/api/attachments`
 }
 
 /**
- * @summary List email attachments (admin only)
+ * @summary List attachments for a user (admin only)
  */
-export const listAttachments = async ( options?: RequestInit): Promise<Attachment[]> => {
+export const listAttachments = async (params: ListAttachmentsParams, options?: RequestInit): Promise<Attachment[]> => {
 
-  return customFetch<Attachment[]>(getListAttachmentsUrl(),
+  return customFetch<Attachment[]>(getListAttachmentsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1484,23 +1492,23 @@ export const listAttachments = async ( options?: RequestInit): Promise<Attachmen
 
 
 
-export const getListAttachmentsQueryKey = () => {
+export const getListAttachmentsQueryKey = (params?: ListAttachmentsParams,) => {
     return [
-    `/api/attachments`
+    `/api/attachments`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListAttachmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListAttachmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorType<unknown>>(params: ListAttachmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListAttachmentsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListAttachmentsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttachments>>> = ({ signal }) => listAttachments({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttachments>>> = ({ signal }) => listAttachments(params, { signal, ...requestOptions });
 
 
 
@@ -1514,15 +1522,15 @@ export type ListAttachmentsQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List email attachments (admin only)
+ * @summary List attachments for a user (admin only)
  */
 
 export function useListAttachments<TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params: ListAttachmentsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListAttachmentsQueryOptions(options)
+  const queryOptions = getListAttachmentsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1544,7 +1552,7 @@ export const getCreateAttachmentUrl = () => {
 }
 
 /**
- * @summary Upload an attachment (admin only)
+ * @summary Upload an attachment for a user (admin only)
  */
 export const createAttachment = async (attachmentInput: AttachmentInput, options?: RequestInit): Promise<Attachment> => {
 
@@ -1593,7 +1601,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateAttachmentMutationError = ErrorType<unknown>
 
     /**
- * @summary Upload an attachment (admin only)
+ * @summary Upload an attachment for a user (admin only)
  */
 export const useCreateAttachment = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttachment>>, TError,{data: BodyType<AttachmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

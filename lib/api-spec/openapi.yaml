@@ -377,7 +377,13 @@ paths:
     get:
       operationId: listAttachments
       tags: [attachments]
-      summary: List email attachments (admin only)
+      summary: List attachments for a user (admin only)
+      parameters:
+        - name: userId
+          in: query
+          required: true
+          schema:
+            type: integer
       responses:
         "200":
           description: List of attachments
@@ -390,7 +396,7 @@ paths:
     post:
       operationId: createAttachment
       tags: [attachments]
-      summary: Upload an attachment (admin only)
+      summary: Upload an attachment for a user (admin only)
       requestBody:
         required: true
         content:
@@ -847,9 +853,11 @@ components:
 
     Attachment:
       type: object
-      required: [id, name, filename, mimeType, isActive, createdAt]
+      required: [id, userId, name, filename, mimeType, isActive, createdAt]
       properties:
         id:
+          type: integer
+        userId:
           type: integer
         name:
           type: string
@@ -865,8 +873,10 @@ components:
 
     AttachmentInput:
       type: object
-      required: [name, filename, mimeType, content]
+      required: [userId, name, filename, mimeType, content]
       properties:
+        userId:
+          type: integer
         name:
           type: string
         filename:

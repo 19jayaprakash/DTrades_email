@@ -24,6 +24,7 @@ export * from './emailHistoryStatus';
 export * from './errorResponse';
 export * from './getDailyActivityParams';
 export * from './healthStatus';
+export * from './listAttachmentsParams';
 export * from './listEmailHistoryParams';
 export * from './listEmailHistoryStatus';
 export * from './listErrorsParams';

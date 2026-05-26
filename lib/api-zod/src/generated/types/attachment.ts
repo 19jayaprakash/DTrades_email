@@ -8,6 +8,7 @@
 
 export interface Attachment {
   id: number;
+  userId: number;
   name: string;
   filename: string;
   mimeType: string;

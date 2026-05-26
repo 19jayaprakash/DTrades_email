@@ -75,11 +75,11 @@ async function sendEmailWithRetry(
   }
 }
 
-async function getActiveAttachments(): Promise<NmAttachment[]> {
+async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
   const rows = await db
     .select()
     .from(attachmentsTable)
-    .where(eq(attachmentsTable.isActive, true));
+    .where(and(eq(attachmentsTable.userId, userId), eq(attachmentsTable.isActive, true)));
   return rows.map(r => ({
     filename: r.filename,
     content: Buffer.from(r.content, "base64"),
@@ -129,11 +129,12 @@ router.post("/emails/send", requireAuth, async (req, res) => {
 
   res.json({ queued: inserted.length, recipients: valid.length, message: `${inserted.length} emails queued for sending` });
 
+  const sendingUserId = (req as any).user?.id as number;
   const delay = Math.min(delaySeconds || 0, 60) * 1000;
   const htmlToSend = htmlContent || template.htmlContent;
 
   setImmediate(async () => {
-    const attachments = await getActiveAttachments();
+    const attachments = await getUserAttachments(sendingUserId);
     for (let i = 0; i < valid.length; i++) {
       const recipient = valid[i];
       const logId = inserted[i].id;
@@ -218,13 +219,14 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
 
   res.json({ success: true, message: "Retry queued" });
 
+  const retryUserId = (req as any).user?.id as number;
   const template = logRow.templateId
     ? await db.select().from(templatesTable).where(eq(templatesTable.id, logRow.templateId)).limit(1).then(r => r[0])
     : null;
   const html = template?.htmlContent || "<p>Retry email</p>";
 
   setImmediate(async () => {
-    const attachments = await getActiveAttachments();
+    const attachments = await getUserAttachments(retryUserId);
     await sendEmailWithRetry(accountRow, { email: logRow.recipientEmail, name: logRow.recipientName || undefined }, logRow.subject, html, id, attachments);
   });
 });

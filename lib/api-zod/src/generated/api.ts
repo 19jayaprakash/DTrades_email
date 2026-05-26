@@ -352,10 +352,15 @@ export const DeleteTemplateResponse = zod.object({
 
 
 /**
- * @summary List email attachments (admin only)
+ * @summary List attachments for a user (admin only)
  */
+export const ListAttachmentsQueryParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
 export const ListAttachmentsResponseItem = zod.object({
   "id": zod.number(),
+  "userId": zod.number(),
   "name": zod.string(),
   "filename": zod.string(),
   "mimeType": zod.string(),
@@ -366,9 +371,10 @@ export const ListAttachmentsResponse = zod.array(ListAttachmentsResponseItem)
 
 
 /**
- * @summary Upload an attachment (admin only)
+ * @summary Upload an attachment for a user (admin only)
  */
 export const CreateAttachmentBody = zod.object({
+  "userId": zod.number(),
   "name": zod.string(),
   "filename": zod.string(),
   "mimeType": zod.string(),
@@ -391,6 +397,7 @@ export const UpdateAttachmentBody = zod.object({
 
 export const UpdateAttachmentResponse = zod.object({
   "id": zod.number(),
+  "userId": zod.number(),
   "name": zod.string(),
   "filename": zod.string(),
   "mimeType": zod.string(),

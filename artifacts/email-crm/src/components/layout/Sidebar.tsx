@@ -9,7 +9,6 @@ import {
   Users,
   AlertCircle,
   LogOut,
-  Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,18 +20,19 @@ export function Sidebar() {
 
   const isAdmin = user.role === "admin";
 
-  const navItems = [
-    ...(isAdmin ? [{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
-    { href: "/compose", label: "Send Email", icon: Send },
-    { href: "/history", label: "History", icon: History },
-    ...(isAdmin ? [
-      { href: "/templates", label: "Templates", icon: FileText },
-      { href: "/accounts", label: "Accounts", icon: Settings },
-      { href: "/attachments", label: "Attachments", icon: Paperclip },
-      { href: "/users", label: "Users", icon: Users },
-      { href: "/errors", label: "Errors", icon: AlertCircle },
-    ] : [])
-  ];
+  const navItems = isAdmin
+    ? [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/history", label: "History", icon: History },
+        { href: "/templates", label: "Templates", icon: FileText },
+        { href: "/accounts", label: "Accounts", icon: Settings },
+        { href: "/users", label: "Users", icon: Users },
+        { href: "/errors", label: "Errors", icon: AlertCircle },
+      ]
+    : [
+        { href: "/compose", label: "Send Email", icon: Send },
+        { href: "/history", label: "History", icon: History },
+      ];
 
   return (
     <div className="flex h-screen w-60 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border">

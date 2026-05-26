@@ -1,7 +1,9 @@
-import { pgTable, serial, text, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
 
 export const attachmentsTable = pgTable("attachments", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => usersTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   filename: text("filename").notNull(),
   mimeType: text("mime_type").notNull().default("application/pdf"),
