@@ -1,6 +1,6 @@
-# MailFlow — Email CRM
+# D Trades International — Email Outreach CRM
 
-A multi-account email sending CRM for teams across regions (USA, UK, India, UAE, Australia). Supports role-based login, template management, bulk email sending via SMTP, and an admin dashboard with full analytics.
+A multi-account email outreach CRM for D Trades International (GSTIN: 33GJCPD2009H1ZT). Supports role-based login, template management, bulk email sending via SMTP with automatic attachments, and an admin dashboard with full analytics.
 
 ## Run & Operate
 

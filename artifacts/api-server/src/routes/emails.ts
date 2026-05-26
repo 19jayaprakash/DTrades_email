@@ -1,7 +1,7 @@
 import { Router } from "express";
 import nodemailer from "nodemailer";
-import { db, accountsTable, templatesTable, emailLogsTable } from "@workspace/db";
-import { eq, and, gte, lte, count, inArray, sql } from "drizzle-orm";
+import { db, accountsTable, templatesTable, emailLogsTable, attachmentsTable } from "@workspace/db";
+import { eq, and, gte, lte, count, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 
@@ -38,7 +38,16 @@ function classifyError(err: Error): { errorType: "smtp_failed" | "invalid_email"
   return { errorType: "smtp_failed", message: err.message };
 }
 
-async function sendEmailWithRetry(accountRow: typeof accountsTable.$inferSelect, to: { email: string; name?: string }, subject: string, html: string, logId: number) {
+type NmAttachment = { filename: string; content: Buffer; contentType: string };
+
+async function sendEmailWithRetry(
+  accountRow: typeof accountsTable.$inferSelect,
+  to: { email: string; name?: string },
+  subject: string,
+  html: string,
+  logId: number,
+  attachments: NmAttachment[]
+) {
   const transporter = nodemailer.createTransport({
     host: accountRow.smtpHost,
     port: accountRow.smtpPort,
@@ -53,6 +62,7 @@ async function sendEmailWithRetry(accountRow: typeof accountsTable.$inferSelect,
       to: to.name ? `"${to.name}" <${to.email}>` : to.email,
       subject,
       html,
+      attachments,
     });
     await db.update(emailLogsTable).set({ status: "sent", sentAt: new Date() }).where(eq(emailLogsTable.id, logId));
     await db.update(accountsTable).set({ sentToday: sql`${accountsTable.sentToday} + 1` }).where(eq(accountsTable.id, accountRow.id));
@@ -63,6 +73,18 @@ async function sendEmailWithRetry(accountRow: typeof accountsTable.$inferSelect,
     await db.update(emailLogsTable).set({ status: "failed", errorType, errorMessage: message }).where(eq(emailLogsTable.id, logId));
     logger.error({ logId, email: to.email, errorType, message }, "Email failed");
   }
+}
+
+async function getActiveAttachments(): Promise<NmAttachment[]> {
+  const rows = await db
+    .select()
+    .from(attachmentsTable)
+    .where(eq(attachmentsTable.isActive, true));
+  return rows.map(r => ({
+    filename: r.filename,
+    content: Buffer.from(r.content, "base64"),
+    contentType: r.mimeType,
+  }));
 }
 
 router.post("/emails/send", requireAuth, async (req, res) => {
@@ -111,10 +133,11 @@ router.post("/emails/send", requireAuth, async (req, res) => {
   const htmlToSend = htmlContent || template.htmlContent;
 
   setImmediate(async () => {
+    const attachments = await getActiveAttachments();
     for (let i = 0; i < valid.length; i++) {
       const recipient = valid[i];
       const logId = inserted[i].id;
-      await sendEmailWithRetry(account, recipient, subject, htmlToSend, logId);
+      await sendEmailWithRetry(account, recipient, subject, htmlToSend, logId, attachments);
       if (delay > 0 && i < valid.length - 1) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -201,13 +224,13 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
   const html = template?.htmlContent || "<p>Retry email</p>";
 
   setImmediate(async () => {
-    await sendEmailWithRetry(accountRow, { email: logRow.recipientEmail, name: logRow.recipientName || undefined }, logRow.subject, html, id);
+    const attachments = await getActiveAttachments();
+    await sendEmailWithRetry(accountRow, { email: logRow.recipientEmail, name: logRow.recipientName || undefined }, logRow.subject, html, id, attachments);
   });
 });
 
 router.get("/emails/queue", requireAuth, async (req, res) => {
-  const [pending, processing] = await Promise.all([
-    db.select({ count: count() }).from(emailLogsTable).where(eq(emailLogsTable.status, "pending")),
+  const [pending] = await Promise.all([
     db.select({ count: count() }).from(emailLogsTable).where(eq(emailLogsTable.status, "pending")),
   ]);
   const pendingCount = Number(pending[0]?.count ?? 0);

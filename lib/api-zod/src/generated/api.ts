@@ -352,6 +352,67 @@ export const DeleteTemplateResponse = zod.object({
 
 
 /**
+ * @summary List email attachments (admin only)
+ */
+export const ListAttachmentsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "filename": zod.string(),
+  "mimeType": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAttachmentsResponse = zod.array(ListAttachmentsResponseItem)
+
+
+/**
+ * @summary Upload an attachment (admin only)
+ */
+export const CreateAttachmentBody = zod.object({
+  "name": zod.string(),
+  "filename": zod.string(),
+  "mimeType": zod.string(),
+  "content": zod.string().describe('Base64 encoded file content'),
+  "isActive": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update attachment (toggle active, rename)
+ */
+export const UpdateAttachmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAttachmentBody = zod.object({
+  "name": zod.string().optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateAttachmentResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "filename": zod.string(),
+  "mimeType": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete attachment
+ */
+export const DeleteAttachmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAttachmentResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary Send emails to a list of recipients
  */
 export const sendEmailsBodyDelaySecondsDefault = 0;

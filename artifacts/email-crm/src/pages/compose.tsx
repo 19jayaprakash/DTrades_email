@@ -1,8 +1,8 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { 
-  useListAccounts, getListAccountsQueryKey, 
+import {
+  useListAccounts, getListAccountsQueryKey,
   useListTemplates, getListTemplatesQueryKey,
-  useSendEmails 
+  useSendEmails
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,27 +10,31 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, Users, Paperclip } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 const composeSchema = z.object({
   accountId: z.coerce.number().min(1, "Please select an account"),
   templateId: z.coerce.number().min(1, "Please select a template"),
   subject: z.string().min(1, "Subject is required"),
   recipients: z.string().min(1, "Please provide at least one recipient"),
-  delaySeconds: z.coerce.number().min(0).max(3600),
 });
 
 type ComposeValues = z.infer<typeof composeSchema>;
 
 export default function Compose() {
   const { toast } = useToast();
-  const { data: accounts, isLoading: accountsLoading } = useListAccounts({ query: { queryKey: getListAccountsQueryKey() } });
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
+  const { data: allAccounts, isLoading: accountsLoading } = useListAccounts({ query: { queryKey: getListAccountsQueryKey() } });
   const { data: templates, isLoading: templatesLoading } = useListTemplates({ query: { queryKey: getListTemplatesQueryKey() } });
-  
+
   const sendMutation = useSendEmails();
 
   const form = useForm<ComposeValues>({
@@ -40,11 +44,13 @@ export default function Compose() {
       templateId: 0,
       subject: "",
       recipients: "",
-      delaySeconds: 2
     }
   });
 
-  // Auto-fill subject when template changes
+  const accounts = isAdmin
+    ? allAccounts?.filter(a => a.isActive)
+    : allAccounts?.filter(a => a.isActive && (!user?.region || a.region === user.region));
+
   const onTemplateChange = (templateId: string) => {
     form.setValue("templateId", parseInt(templateId));
     const template = templates?.find(t => t.id === parseInt(templateId));
@@ -53,27 +59,28 @@ export default function Compose() {
     }
   };
 
+  const recipientCount = form.watch("recipients").split("\n").filter(l => l.trim()).length;
+
   const onSubmit = async (data: ComposeValues) => {
-    if (!confirm(`Are you sure you want to queue this campaign to ${data.recipients.split('\n').filter(Boolean).length} recipients?`)) return;
-    
     try {
-      const res = await sendMutation.mutateAsync({ data });
-      toast({ 
-        title: "Campaign queued", 
-        description: `Successfully queued ${res.queued} out of ${res.recipients} recipients.` 
+      const res = await sendMutation.mutateAsync({
+        data: { ...data, delaySeconds: 2 }
+      });
+      toast({
+        title: "Emails sent",
+        description: `${res.queued} of ${res.recipients} emails queued successfully.`
       });
       form.reset({
         accountId: data.accountId,
         templateId: data.templateId,
         subject: data.subject,
         recipients: "",
-        delaySeconds: data.delaySeconds
       });
     } catch (e: any) {
-      toast({ 
-        title: "Failed to queue campaign", 
+      toast({
+        title: "Failed to send",
         description: e.error || "An error occurred",
-        variant: "destructive" 
+        variant: "destructive"
       });
     }
   };
@@ -82,24 +89,26 @@ export default function Compose() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 max-w-4xl mx-auto">
+      <div className="flex flex-col gap-6 max-w-3xl mx-auto">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Compose Campaign</h1>
-          <p className="text-muted-foreground">Queue and send precise outreach campaigns.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Send Email</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Compose and send outreach emails on behalf of D Trades International.
+          </p>
         </div>
-        
+
         {isLoading ? (
-          <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+          <div className="flex justify-center p-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Send Parameters</CardTitle>
-              <CardDescription>Select your sender identity, template, and recipient list.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <div className="grid grid-cols-2 gap-6">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <Card>
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-base">Campaign Settings</CardTitle>
+                  <CardDescription className="text-sm">Choose the sender account and email template.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="accountId"
@@ -109,12 +118,17 @@ export default function Compose() {
                           <Select onValueChange={field.onChange} value={field.value ? field.value.toString() : undefined}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select an account" />
+                                <SelectValue placeholder="Select account" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {accounts?.filter(a => a.isActive).map(acc => (
-                                <SelectItem key={acc.id} value={acc.id.toString()}>{acc.name} ({acc.email})</SelectItem>
+                              {accounts?.map(acc => (
+                                <SelectItem key={acc.id} value={acc.id.toString()}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{acc.name}</span>
+                                    <Badge variant="outline" className="text-[10px] py-0 h-4">{acc.region}</Badge>
+                                  </div>
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -131,7 +145,7 @@ export default function Compose() {
                           <Select onValueChange={onTemplateChange} value={field.value ? field.value.toString() : undefined}>
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select a template" />
+                                <SelectValue placeholder="Select template" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -159,53 +173,58 @@ export default function Compose() {
                       </FormItem>
                     )}
                   />
+                </CardContent>
+              </Card>
 
+              <Card>
+                <CardHeader className="pb-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Recipients</CardTitle>
+                      <CardDescription className="text-sm mt-1">One per line — email address or Name,email format.</CardDescription>
+                    </div>
+                    {recipientCount > 0 && (
+                      <Badge variant="secondary" className="gap-1.5">
+                        <Users className="h-3 w-3" />
+                        {recipientCount} recipient{recipientCount !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
                   <FormField
                     control={form.control}
                     name="recipients"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Recipients List</FormLabel>
                         <FormControl>
-                          <Textarea 
-                            placeholder="user@example.com&#10;John Doe,john@example.com" 
-                            className="min-h-[200px] font-mono text-sm"
-                            {...field} 
+                          <Textarea
+                            placeholder={"buyer@restaurant.com\nJohn Smith,john@wholesale.co.uk\nRachel Green,rachel@grocer.com.au"}
+                            className="min-h-[220px] font-mono text-sm resize-none"
+                            {...field}
                           />
                         </FormControl>
-                        <p className="text-xs text-muted-foreground mt-1">One recipient per line. Format: email or Name,email</p>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                </CardContent>
+              </Card>
 
-                  <div className="flex items-end justify-between border-t pt-6">
-                    <FormField
-                      control={form.control}
-                      name="delaySeconds"
-                      render={({ field }) => (
-                        <FormItem className="w-[150px]">
-                          <FormLabel>Delay Between Sends</FormLabel>
-                          <div className="flex items-center gap-2">
-                            <FormControl>
-                              <Input type="number" min="0" {...field} />
-                            </FormControl>
-                            <span className="text-sm text-muted-foreground">sec</span>
-                          </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button type="submit" size="lg" disabled={sendMutation.isPending}>
-                      {sendMutation.isPending ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Send className="mr-2 h-5 w-5" />}
-                      Queue Campaign
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+              <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-3 border">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Paperclip className="h-4 w-4" />
+                  <span>Terms &amp; Conditions and Brochure will be attached automatically</span>
+                </div>
+                <Button type="submit" disabled={sendMutation.isPending} className="min-w-[120px]">
+                  {sendMutation.isPending
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
+                    : <><Send className="mr-2 h-4 w-4" />Send Emails</>
+                  }
+                </Button>
+              </div>
+            </form>
+          </Form>
         )}
       </div>
     </AppLayout>

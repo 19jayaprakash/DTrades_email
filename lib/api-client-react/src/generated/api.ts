@@ -24,6 +24,9 @@ import type {
   AccountInput,
   AccountStat,
   AccountUpdate,
+  Attachment,
+  AttachmentInput,
+  AttachmentUpdate,
   AuthResponse,
   DailyActivity,
   DashboardStats,
@@ -1453,6 +1456,296 @@ export const useDeleteTemplate = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteTemplateMutationOptions(options));
+    }
+
+export const getListAttachmentsUrl = () => {
+
+
+
+
+  return `/api/attachments`
+}
+
+/**
+ * @summary List email attachments (admin only)
+ */
+export const listAttachments = async ( options?: RequestInit): Promise<Attachment[]> => {
+
+  return customFetch<Attachment[]>(getListAttachmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAttachmentsQueryKey = () => {
+    return [
+    `/api/attachments`
+    ] as const;
+    }
+
+
+export const getListAttachmentsQueryOptions = <TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAttachmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAttachments>>> = ({ signal }) => listAttachments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAttachmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listAttachments>>>
+export type ListAttachmentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List email attachments (admin only)
+ */
+
+export function useListAttachments<TData = Awaited<ReturnType<typeof listAttachments>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAttachments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAttachmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateAttachmentUrl = () => {
+
+
+
+
+  return `/api/attachments`
+}
+
+/**
+ * @summary Upload an attachment (admin only)
+ */
+export const createAttachment = async (attachmentInput: AttachmentInput, options?: RequestInit): Promise<Attachment> => {
+
+  return customFetch<Attachment>(getCreateAttachmentUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      attachmentInput,)
+  }
+);}
+
+
+
+
+export const getCreateAttachmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttachment>>, TError,{data: BodyType<AttachmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAttachment>>, TError,{data: BodyType<AttachmentInput>}, TContext> => {
+
+const mutationKey = ['createAttachment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAttachment>>, {data: BodyType<AttachmentInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAttachment(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof createAttachment>>>
+    export type CreateAttachmentMutationBody = BodyType<AttachmentInput>
+    export type CreateAttachmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Upload an attachment (admin only)
+ */
+export const useCreateAttachment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAttachment>>, TError,{data: BodyType<AttachmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAttachment>>,
+        TError,
+        {data: BodyType<AttachmentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAttachmentMutationOptions(options));
+    }
+
+export const getUpdateAttachmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/attachments/${id}`
+}
+
+/**
+ * @summary Update attachment (toggle active, rename)
+ */
+export const updateAttachment = async (id: number,
+    attachmentUpdate: AttachmentUpdate, options?: RequestInit): Promise<Attachment> => {
+
+  return customFetch<Attachment>(getUpdateAttachmentUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      attachmentUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateAttachmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAttachment>>, TError,{id: number;data: BodyType<AttachmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAttachment>>, TError,{id: number;data: BodyType<AttachmentUpdate>}, TContext> => {
+
+const mutationKey = ['updateAttachment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAttachment>>, {id: number;data: BodyType<AttachmentUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAttachment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateAttachment>>>
+    export type UpdateAttachmentMutationBody = BodyType<AttachmentUpdate>
+    export type UpdateAttachmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update attachment (toggle active, rename)
+ */
+export const useUpdateAttachment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAttachment>>, TError,{id: number;data: BodyType<AttachmentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAttachment>>,
+        TError,
+        {id: number;data: BodyType<AttachmentUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAttachmentMutationOptions(options));
+    }
+
+export const getDeleteAttachmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/attachments/${id}`
+}
+
+/**
+ * @summary Delete attachment
+ */
+export const deleteAttachment = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteAttachmentUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAttachmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAttachment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAttachment>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteAttachment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAttachment>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAttachment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAttachmentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAttachment>>>
+
+    export type DeleteAttachmentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete attachment
+ */
+export const useDeleteAttachment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAttachment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAttachment>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteAttachmentMutationOptions(options));
     }
 
 export const getSendEmailsUrl = () => {

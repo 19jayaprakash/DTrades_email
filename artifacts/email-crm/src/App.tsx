@@ -12,6 +12,7 @@ import Compose from "@/pages/compose";
 import History from "@/pages/history";
 import Templates from "@/pages/templates";
 import Accounts from "@/pages/accounts";
+import Attachments from "@/pages/attachments";
 import Users from "@/pages/users";
 import Errors from "@/pages/errors";
 
@@ -27,9 +28,10 @@ function Router() {
       <Route path="/history" component={History} />
       <Route path="/templates" component={Templates} />
       <Route path="/accounts" component={Accounts} />
+      <Route path="/attachments" component={Attachments} />
       <Route path="/users" component={Users} />
       <Route path="/errors" component={Errors} />
-      
+
       <Route path="/">
         <Redirect to="/dashboard" />
       </Route>

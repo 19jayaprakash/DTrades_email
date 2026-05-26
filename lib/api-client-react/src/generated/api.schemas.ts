@@ -153,6 +153,29 @@ export interface TemplateUpdate {
   variables?: string[];
 }
 
+export interface Attachment {
+  id: number;
+  name: string;
+  filename: string;
+  mimeType: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AttachmentInput {
+  name: string;
+  filename: string;
+  mimeType: string;
+  /** Base64 encoded file content */
+  content: string;
+  isActive?: boolean;
+}
+
+export interface AttachmentUpdate {
+  name?: string;
+  isActive?: boolean;
+}
+
 export interface SendEmailInput {
   accountId: number;
   templateId: number;

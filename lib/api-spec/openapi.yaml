@@ -19,6 +19,8 @@ tags:
     description: Email sending and history
   - name: accounts
     description: Sender account management
+  - name: attachments
+    description: Email attachment management
   - name: dashboard
     description: Dashboard analytics
 paths:
@@ -357,6 +359,80 @@ paths:
       operationId: deleteTemplate
       tags: [templates]
       summary: Delete template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /attachments:
+    get:
+      operationId: listAttachments
+      tags: [attachments]
+      summary: List email attachments (admin only)
+      responses:
+        "200":
+          description: List of attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Attachment"
+    post:
+      operationId: createAttachment
+      tags: [attachments]
+      summary: Upload an attachment (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachmentInput"
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+
+  /attachments/{id}:
+    patch:
+      operationId: updateAttachment
+      tags: [attachments]
+      summary: Update attachment (toggle active, rename)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachmentUpdate"
+      responses:
+        "200":
+          description: Updated attachment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Attachment"
+    delete:
+      operationId: deleteAttachment
+      tags: [attachments]
+      summary: Delete attachment
       parameters:
         - name: id
           in: path
@@ -768,6 +844,48 @@ components:
           type: array
           items:
             type: string
+
+    Attachment:
+      type: object
+      required: [id, name, filename, mimeType, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    AttachmentInput:
+      type: object
+      required: [name, filename, mimeType, content]
+      properties:
+        name:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        content:
+          type: string
+          description: "Base64 encoded file content"
+        isActive:
+          type: boolean
+
+    AttachmentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        isActive:
+          type: boolean
 
     SendEmailInput:
       type: object
