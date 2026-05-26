@@ -174,7 +174,7 @@ export default function Templates() {
                     )} />
                     
                     <div className="space-y-2">
-                      <FormLabel>Live Preview</FormLabel>
+                      <p className="text-sm font-medium leading-none">Live Preview</p>
                       <div 
                         className="border rounded-md p-4 min-h-[300px] prose prose-sm max-w-none dark:prose-invert bg-white"
                         dangerouslySetInnerHTML={{ __html: form.watch("htmlContent") || "<p class='text-muted-foreground'>Preview will appear here</p>" }}
