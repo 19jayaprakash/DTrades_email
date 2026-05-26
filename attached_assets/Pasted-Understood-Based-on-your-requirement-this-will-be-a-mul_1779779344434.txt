@@ -1,0 +1,285 @@
+Understood. Based on your requirement, this will be a **multi-account email CRM/dashboard** instead of Excel upload.
+
+### Final system architecture
+
+#### Authentication
+
+* **1 Admin account**
+* **5–6 sender accounts** (USA, UK, India, etc.)
+* Role-based login
+
+Example:
+
+* Admin
+* USA Team
+* UK Team
+* India Team
+* UAE Team
+* Australia Team
+
+#### Email sending flow
+
+Instead of Excel:
+
+You will **copy-paste multiple emails**
+
+Example:
+
+```txt
+john@gmail.com
+alex@gmail.com
+david@gmail.com
+mark@gmail.com
+```
+
+Or:
+
+```txt
+John,john@gmail.com
+Alex,alex@gmail.com
+David,david@gmail.com
+```
+
+System auto-detects and converts into recipients.
+
+---
+
+### Main Features
+
+#### 1. Login System
+
+* Secure login
+* JWT authentication
+* Role-based access
+
+**Admin**
+
+* View all accounts
+* Manage templates
+* See all email histories
+* Failed/success emails
+* Account health
+* Sender statistics
+* Activity logs
+
+**User (USA/UK/etc.)**
+
+* Send emails only
+* Use assigned templates
+* View their own history
+
+---
+
+#### 2. Template Management (Admin)
+
+Admin can create templates:
+
+Example:
+
+* Real Estate USA
+* UK Apartment Offer
+* Sales Follow-up
+* Job Outreach
+
+Features:
+
+* Rich text editor
+* Font selection
+* Font size
+* Color
+* Bold/italic
+* Add images
+* Add links
+* Default saved templates
+
+Dynamic variables:
+
+```html
+Hi {{name}},
+
+We have exclusive property offers available in {{country}}.
+```
+
+---
+
+#### 3. Compose Email Screen
+
+User flow:
+
+1. Select Account (USA/UK)
+2. Paste Emails
+3. Select Template
+4. Edit content
+5. Subject line
+6. Add attachment
+7. Preview email
+8. Send
+
+Features:
+
+* Individual sending
+* Queue system
+* Delay control
+* Spam prevention
+* Retry failed emails
+
+---
+
+#### 4. Dashboard Analytics
+
+Admin dashboard:
+
+Cards:
+
+* Total Emails Sent
+* Failed Emails
+* Pending Queue
+* Delivered
+* Open Rate
+* Bounce Rate
+
+Country account stats:
+
+* USA account → 1,230 sent
+* UK account → 980 sent
+
+Graphs:
+
+* Daily emails
+* Monthly emails
+* Success vs Failed
+
+---
+
+#### 5. Email History
+
+Admin sees:
+
+| Account | Recipient                               | Subject | Status | Time  |
+| ------- | --------------------------------------- | ------- | ------ | ----- |
+| USA     | [john@gmail.com](mailto:john@gmail.com) | Offer   | Sent   | 10:30 |
+| UK      | [alex@gmail.com](mailto:alex@gmail.com) | Offer   | Failed | 10:35 |
+
+Filter:
+
+* USA / UK
+* Success
+* Failed
+* Pending
+* Date range
+
+---
+
+#### 6. Error Monitoring
+
+Admin can see:
+
+* SMTP failed
+* Wrong email
+* Blocked email
+* Gmail limit reached
+* Authentication issue
+
+Retry option.
+
+---
+
+### Tech Stack
+
+**Frontend**
+
+* Next.js (TSX)
+* Tailwind CSS
+* Shadcn UI
+* Responsive design
+* Light theme
+
+**Backend**
+
+* Node.js
+* Express.js
+
+**Database**
+
+* MySQL
+
+**Email Service**
+
+* Nodemailer
+* Google Workspace SMTP
+
+**Editor**
+
+* Rich text editor with fonts
+
+---
+
+### Suggested folder structure
+
+```txt
+email-crm/
+│── frontend/
+│   ├── app/
+│   ├── components/
+│   ├── dashboard/
+│   ├── templates/
+│   ├── compose/
+│   └── auth/
+│
+│── backend/
+│   ├── controllers/
+│   ├── models/
+│   ├── routes/
+│   ├── middleware/
+│   ├── services/
+│   ├── utils/
+│   └── server.js
+│
+│── database/
+│── README.md
+```
+
+### Database tables
+
+```txt
+users
+templates
+email_history
+accounts
+email_logs
+failed_emails
+attachments
+settings
+```
+
+### Security
+
+* Password hashing
+* JWT auth
+* Role permissions
+* SMTP encryption
+* Rate limiting
+* Audit logs
+
+### Responsive UI
+
+* Desktop
+* Tablet
+* Mobile
+* Light theme only
+
+### README.md will include
+
+* Project setup
+* MySQL setup
+* Environment variables
+* Google Workspace SMTP setup
+* Create admin account
+* Add sender accounts
+* Start frontend/backend
+* Deployment guide
+* VPS hosting steps
+* Domain setup
+* Production build process
+
+This is a **medium-large production project** (similar to a mini email CRM). I can generate the **full production-ready codebase** with the README and responsive UI structure.
