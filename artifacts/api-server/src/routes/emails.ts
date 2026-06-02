@@ -11,8 +11,8 @@ import { decompressContent } from "../lib/compression";
 
 const router = Router();
 
-// Gmail size limit: 25MB. We stay safely under at 20MB total mail size.
-const MAX_EMAIL_SIZE_BYTES = 20 * 1024 * 1024;
+// Gmail size limit: 25MB. We stay safely under at 24.5MB total mail size.
+const MAX_EMAIL_SIZE_BYTES = 24.5 * 1024 * 1024;
 
 // Max concurrent SMTP sends per batch
 const SEND_CONCURRENCY = 5;
