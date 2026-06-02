@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, attachmentsTable, userAttachmentsTable, attachmentContentsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, requireAdmin } from "../lib/auth";
+import { compressContent, decompressContent } from "../lib/compression";
 
 const router = Router();
 
@@ -29,7 +30,7 @@ router.get("/attachments", requireAuth, async (req, res) => {
       .innerJoin(userAttachmentsTable, eq(userAttachmentsTable.attachmentId, attachmentsTable.id))
       .where(and(eq(userAttachmentsTable.userId, reqUser.id), eq(attachmentsTable.isActive, true)))
       .orderBy(attachmentsTable.createdAt);
-    res.json(rows);
+    res.json(rows.map(r => ({ ...r, content: decompressContent(r.content) })));
     return;
   }
 
@@ -53,7 +54,7 @@ router.get("/attachments", requireAuth, async (req, res) => {
       .innerJoin(userAttachmentsTable, eq(userAttachmentsTable.attachmentId, attachmentsTable.id))
       .where(eq(userAttachmentsTable.userId, userIdQuery))
       .orderBy(attachmentsTable.createdAt);
-    res.json(rows);
+    res.json(rows.map(r => ({ ...r, content: decompressContent(r.content) })));
     return;
   }
 
@@ -82,6 +83,7 @@ router.get("/attachments", requireAuth, async (req, res) => {
       .map(a => a.userId);
     return {
       ...att,
+      content: decompressContent(att.content),
       assignedUserIds,
     };
   });
@@ -123,9 +125,10 @@ router.post("/attachments", requireAuth, requireAdmin, async (req, res) => {
       createdAt: attachmentsTable.createdAt,
     });
 
+  const compressedContent = compressContent(content);
   await db.insert(attachmentContentsTable).values({
     attachmentId: row.id,
-    content,
+    content: compressedContent,
   });
 
   if (Array.isArray(assignedUserIds) && assignedUserIds.length > 0) {
@@ -192,6 +195,7 @@ router.patch("/attachments/:id", requireAuth, requireAdmin, async (req, res) => 
   }
 
   if (content !== undefined) {
+    const compressedContent = compressContent(content);
     const [existingContent] = await db
       .select({ attachmentId: attachmentContentsTable.attachmentId })
       .from(attachmentContentsTable)
@@ -200,12 +204,12 @@ router.patch("/attachments/:id", requireAuth, requireAdmin, async (req, res) => 
     if (existingContent) {
       await db
         .update(attachmentContentsTable)
-        .set({ content })
+        .set({ content: compressedContent })
         .where(eq(attachmentContentsTable.attachmentId, id));
     } else {
       await db
         .insert(attachmentContentsTable)
-        .values({ attachmentId: id, content });
+        .values({ attachmentId: id, content: compressedContent });
     }
   }
 

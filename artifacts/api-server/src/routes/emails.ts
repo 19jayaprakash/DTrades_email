@@ -7,6 +7,7 @@ import { logger } from "../lib/logger";
 import { sendViaGmailApi, isGmailApiAvailable } from "../lib/gmail-sender";
 import path from "path";
 import fs from "fs";
+import { decompressContent } from "../lib/compression";
 
 const router = Router();
 
@@ -229,11 +230,14 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
       )
     );
 
-  const result: NmAttachment[] = termsRows.map(r => ({
-    filename: r.filename,
-    content: Buffer.from(r.content, "base64"),
-    contentType: r.mimeType,
-  }));
+  const result: NmAttachment[] = termsRows.map(r => {
+    const decompressed = decompressContent(r.content) || "";
+    return {
+      filename: r.filename,
+      content: Buffer.from(decompressed, "base64"),
+      contentType: r.mimeType,
+    };
+  });
 
   // Fetch the selected catalog separately (if any)
   if (selectedCatalogId !== undefined && selectedCatalogId !== null) {
@@ -256,9 +260,10 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
       .limit(1);
 
     for (const r of catalogRows) {
+      const decompressed = decompressContent(r.content) || "";
       result.push({
         filename: r.filename,
-        content: Buffer.from(r.content, "base64"),
+        content: Buffer.from(decompressed, "base64"),
         contentType: r.mimeType,
       });
     }
@@ -323,7 +328,8 @@ router.post("/emails/send", requireAuth, async (req, res) => {
       .where(and(eq(attachmentsTable.type, "signature"), eq(attachmentsTable.isActive, true)))
       .limit(1);
     if (sigRow) {
-      globalSignatureHtml = Buffer.from(sigRow.content, "base64").toString("utf-8");
+      const decompressed = decompressContent(sigRow.content) || "";
+      globalSignatureHtml = Buffer.from(decompressed, "base64").toString("utf-8");
     }
   } catch (e) {
     logger.error({ err: e }, "Error fetching global signature");
@@ -342,7 +348,11 @@ router.post("/emails/send", requireAuth, async (req, res) => {
       .where(and(eq(attachmentsTable.type, "signature_banner"), eq(attachmentsTable.isActive, true)))
       .limit(1);
     if (bannerRow) {
-      customBannerRow = bannerRow;
+      customBannerRow = {
+        filename: bannerRow.filename,
+        content: decompressContent(bannerRow.content) || "",
+        mimeType: bannerRow.mimeType,
+      };
     }
   } catch (e) {
     logger.error({ err: e }, "Error fetching custom signature banner");
@@ -464,7 +474,8 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
       .where(and(eq(attachmentsTable.type, "signature"), eq(attachmentsTable.isActive, true)))
       .limit(1);
     if (sigRow) {
-      globalSignatureHtml = Buffer.from(sigRow.content, "base64").toString("utf-8");
+      const decompressed = decompressContent(sigRow.content) || "";
+      globalSignatureHtml = Buffer.from(decompressed, "base64").toString("utf-8");
     }
   } catch (e) {
     logger.error({ err: e }, "Error fetching global signature");
@@ -483,7 +494,11 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
       .where(and(eq(attachmentsTable.type, "signature_banner"), eq(attachmentsTable.isActive, true)))
       .limit(1);
     if (bannerRow) {
-      customBannerRow = bannerRow;
+      customBannerRow = {
+        filename: bannerRow.filename,
+        content: decompressContent(bannerRow.content) || "",
+        mimeType: bannerRow.mimeType,
+      };
     }
   } catch (e) {
     logger.error({ err: e }, "Error fetching custom signature banner");
