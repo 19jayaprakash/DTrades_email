@@ -90,6 +90,59 @@ async function uploadToCloudinary(
   });
 }
 
+// Chunked upload for files >9.5MB that exceed Cloudinary free plan limit.
+async function uploadFileInChunks(
+  file: File,
+  name: string,
+  type: string,
+  onProgress: (pct: number) => void
+): Promise<void> {
+  const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB per chunk
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const chunk = file.slice(start, end);
+
+    const chunkContent = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(chunk);
+    });
+
+    const response = await fetch("/api/attachments/chunk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uploadId, chunkIndex: i, content: chunkContent }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `Chunk ${i} upload failed`);
+    }
+    onProgress(Math.round(((i + 1) / totalChunks) * 90));
+  }
+
+  const assembleResponse = await fetch("/api/attachments/assemble", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      uploadId, name,
+      filename: file.name,
+      mimeType: file.type || "application/pdf",
+      type, isActive: true, assignedUserIds: [],
+    }),
+  });
+
+  if (!assembleResponse.ok) {
+    const err = await assembleResponse.json().catch(() => ({}));
+    throw new Error(err.error || "Assembly failed");
+  }
+  onProgress(100);
+}
+
 export default function Documents() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -323,29 +376,41 @@ export default function Documents() {
 
     setUploading(true);
     setUploadProgress(0);
-    try {
-      const secureUrl = await uploadToCloudinary(selectedFile, (pct) => {
-        setUploadProgress(pct);
-      });
+    const docType = activeTab === "signature" ? "catalog" : activeTab;
 
-      await createMutation.mutateAsync({
-        data: {
-          name: newDocName,
-          filename: selectedFile.name,
-          mimeType: selectedFile.type || "application/pdf",
-          content: secureUrl,
-          type: activeTab === "signature" ? "catalog" : activeTab,
-          isActive: true,
-          assignedUserIds: [], // Start with empty assignments
-        }
-      });
+    try {
+      const CLOUDINARY_MAX = 9.5 * 1024 * 1024; // 9.5MB — Cloudinary free plan limit is 10MB
+
+      if (selectedFile.size > CLOUDINARY_MAX) {
+        // Large file: upload in 2MB chunks via the API server
+        await uploadFileInChunks(selectedFile, newDocName, docType, (pct) => {
+          setUploadProgress(pct);
+        });
+      } else {
+        // Small file: upload directly to Cloudinary
+        const secureUrl = await uploadToCloudinary(selectedFile, (pct) => {
+          setUploadProgress(pct);
+        });
+        await createMutation.mutateAsync({
+          data: {
+            name: newDocName,
+            filename: selectedFile.name,
+            mimeType: selectedFile.type || "application/pdf",
+            content: secureUrl,
+            type: docType,
+            isActive: true,
+            assignedUserIds: [],
+          }
+        });
+      }
+
       refresh();
       setIsUploadOpen(false);
       setSelectedFile(null);
       setNewDocName("");
       toast({
         title: "Document uploaded",
-        description: `"${newDocName}" has been successfully uploaded to Cloudinary.`,
+        description: `"${newDocName}" has been uploaded successfully.`,
       });
     } catch (err: any) {
       toast({
