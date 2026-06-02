@@ -699,12 +699,14 @@ export default function Documents() {
                       <div 
                         className="text-slate-700 prose prose-sm max-w-none font-sans"
                         dangerouslySetInnerHTML={{ 
-                          __html: sigValue.replace(
-                            "cid:signature_banner_image", 
-                            customBannerDoc?.content 
-                              ? (customBannerDoc.content.startsWith("http") ? customBannerDoc.content : `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}`)
-                              : "/export_masala.png"
-                          ) 
+                          __html: customBannerDoc?.content 
+                            ? sigValue.replace(
+                                "cid:signature_banner_image", 
+                                customBannerDoc.content.startsWith("http") ? customBannerDoc.content : `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}`
+                              )
+                            : sigValue
+                                .replace(/<div[^>]*>\s*<img[^>]*src="cid:signature_banner_image"[^>]*>\s*<\/div>/i, "")
+                                .replace(/<img[^>]*src="cid:signature_banner_image"[^>]*>/i, "")
                         }} 
                       />
                     </div>

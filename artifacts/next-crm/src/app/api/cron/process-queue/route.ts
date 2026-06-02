@@ -210,12 +210,19 @@ export async function GET(req: Request) {
       console.error("Error loading signature banner:", e.message);
     }
 
+    if (!customBannerRow && globalSignatureHtml) {
+      // Remove the hardcoded banner placeholder from the DB signature if no custom banner exists
+      globalSignatureHtml = globalSignatureHtml
+        .replace(/<div[^>]*>\s*<img[^>]*src="cid:signature_banner_image"[^>]*>\s*<\/div>/i, "")
+        .replace(/<img[^>]*src="cid:signature_banner_image"[^>]*>/i, "");
+    }
+
     const signatureBannerCid = "signature_banner_image";
-    const bannerHtml = `
+    const bannerHtml = customBannerRow ? `
       <div style="margin-top: 15px;">
         <img src="cid:${signatureBannerCid}" alt="D Trades Spices & Ingredients" style="width: 100%; max-width: 600px; display: block;" />
       </div>
-    `;
+    ` : "";
 
     const signatureHtml = account.signature
       ? `<br><br><div style="font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.5; margin-top: 20px;">
@@ -265,17 +272,6 @@ export async function GET(req: Request) {
         contentType: customBannerRow.mimeType,
         cid: signatureBannerCid
       } as any);
-    } else {
-      // Fallback signature banner
-      const bannerPath = path.join(process.cwd(), "public/export_masala.png");
-      if (fs.existsSync(bannerPath)) {
-        mailAttachments.push({
-          filename: "signature_banner.png",
-          content: fs.readFileSync(bannerPath),
-          contentType: "image/png",
-          cid: signatureBannerCid
-        } as any);
-      }
     }
 
     // 6. Size guard verification
