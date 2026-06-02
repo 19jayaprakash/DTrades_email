@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import bcrypt from "bcryptjs";
-import { db, usersTable, accountsTable, templatesTable, emailLogsTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable } from "@workspace/db";
+import { db, usersTable, accountsTable, templatesTable, emailLogsTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable, attachmentChunksTable } from "@workspace/db";
 import { eq, and, sql, gte, lte, count } from "drizzle-orm";
 import { signToken, requireAuth, requireAdmin } from "@/lib/auth";
 import { compressContent, decompressContent } from "@/lib/compression";
@@ -575,6 +575,83 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
     return NextResponse.json(template, { status: 201 });
   }
 
+  // ── 4.5. ATTACHMENT CHUNKING ENDPOINTS (POST) ──────────────────────────────
+  if (route[0] === "attachments" && route[1] === "chunk") {
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const { uploadId, chunkIndex, content } = body;
+    if (!uploadId || chunkIndex === undefined || !content) {
+      return NextResponse.json({ error: "uploadId, chunkIndex, content are required" }, { status: 400 });
+    }
+
+    await db.insert(attachmentChunksTable).values({
+      uploadId,
+      chunkIndex,
+      content,
+    });
+
+    return NextResponse.json({ success: true, message: `Chunk ${chunkIndex} received` }, { status: 201 });
+  }
+
+  if (route[0] === "attachments" && route[1] === "assemble") {
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const { uploadId, name, filename, mimeType, type, isActive, assignedUserIds } = body;
+    if (!uploadId || !name || !filename || !mimeType) {
+      return NextResponse.json({ error: "uploadId, name, filename, mimeType are required" }, { status: 400 });
+    }
+
+    // Query chunks ordered by chunkIndex
+    const chunks = await db
+      .select()
+      .from(attachmentChunksTable)
+      .where(eq(attachmentChunksTable.uploadId, uploadId))
+      .orderBy(attachmentChunksTable.chunkIndex);
+
+    if (chunks.length === 0) {
+      return NextResponse.json({ error: "No chunks found for this uploadId" }, { status: 400 });
+    }
+
+    // Concatenate chunks
+    const fullContent = chunks.map(c => c.content).join("");
+
+    // Clean up temporary chunks
+    await db.delete(attachmentChunksTable).where(eq(attachmentChunksTable.uploadId, uploadId));
+
+    // Save attachment in database
+    const [row] = await db.insert(attachmentsTable).values({
+      userId: authUser.id,
+      name,
+      filename,
+      mimeType,
+      type: type || "catalog",
+      isActive: isActive !== false,
+    }).returning();
+
+    const compressedContent = compressContent(fullContent);
+    await db.insert(attachmentContentsTable).values({
+      attachmentId: row.id,
+      content: compressedContent,
+    });
+
+    if (Array.isArray(assignedUserIds) && assignedUserIds.length > 0) {
+      await db.insert(userAttachmentsTable).values(
+        assignedUserIds.map((uId: number) => ({
+          userId: uId,
+          attachmentId: row.id,
+        }))
+      );
+    }
+
+    return NextResponse.json({
+      ...row,
+      content: fullContent,
+      assignedUserIds: assignedUserIds || [],
+    }, { status: 201 });
+  }
+
   // ── 5. ATTACHMENTS CRUD ─────────────────────────────────────────────────────
   if (route[0] === "attachments" && !route[1]) {
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -817,7 +894,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ route:
     if (name !== undefined) updates.name = name;
     if (isActive !== undefined) updates.isActive = isActive;
 
-    const [row] = await db.update(attachmentsTable).set(updates).where(eq(attachmentsTable.id, id)).returning();
+    let row;
+    if (Object.keys(updates).length > 0) {
+      const [updated] = await db.update(attachmentsTable).set(updates).where(eq(attachmentsTable.id, id)).returning();
+      row = updated;
+    } else {
+      const [existing] = await db.select().from(attachmentsTable).where(eq(attachmentsTable.id, id)).limit(1);
+      row = existing;
+    }
+
     if (!row) return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
 
     if (content !== undefined) {

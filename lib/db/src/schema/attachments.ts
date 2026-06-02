@@ -24,7 +24,17 @@ export const userAttachmentsTable = pgTable("user_attachments", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const attachmentChunksTable = pgTable("attachment_chunks", {
+  id: serial("id").primaryKey(),
+  uploadId: text("upload_id").notNull(),
+  chunkIndex: integer("chunk_index").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type Attachment = typeof attachmentsTable.$inferSelect;
 export type AttachmentContent = typeof attachmentContentsTable.$inferSelect;
 export type UserAttachment = typeof userAttachmentsTable.$inferSelect;
+export type AttachmentChunk = typeof attachmentChunksTable.$inferSelect;
+
 

@@ -73,6 +73,71 @@ function resizeAndCompressImage(file: File, maxWidth = 1000, quality = 0.85): Pr
   });
 }
 
+async function uploadFileInChunks(
+  file: File,
+  newDocName: string,
+  activeTab: string,
+  onProgress: (pct: number) => void
+): Promise<any> {
+  const content = await fileToBase64(file);
+  const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks to stay extremely safe under 4.5MB
+  const totalChunks = Math.ceil(content.length / CHUNK_SIZE);
+  const uploadId = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, content.length);
+    const chunkContent = content.substring(start, end);
+
+    onProgress(Math.round((i / totalChunks) * 95));
+
+    // Send chunk to API
+    const response = await fetch("/api/attachments/chunk", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        uploadId,
+        chunkIndex: i,
+        content: chunkContent,
+      }),
+    });
+
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => ({}));
+      throw new Error(errBody.error || `Chunk ${i} upload failed`);
+    }
+  }
+
+  onProgress(97);
+
+  // Send assemble command
+  const assembleResponse = await fetch("/api/attachments/assemble", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      uploadId,
+      name: newDocName,
+      filename: file.name,
+      mimeType: file.type || "application/pdf",
+      type: activeTab === "signature" ? "catalog" : activeTab,
+      isActive: true,
+      assignedUserIds: [],
+    }),
+  });
+
+  if (!assembleResponse.ok) {
+    const errBody = await assembleResponse.json().catch(() => ({}));
+    throw new Error(errBody.error || "Assembly failed");
+  }
+
+  onProgress(100);
+  return assembleResponse.json();
+}
+
 export default function Documents() {
   const { user } = useAuth();
   const router = useRouter();
@@ -85,6 +150,7 @@ export default function Documents() {
   const [newDocName, setNewDocName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Assignment state
   const [assigningDoc, setAssigningDoc] = useState<Attachment | null>(null);
@@ -318,26 +384,34 @@ export default function Documents() {
     if (!selectedFile || !newDocName) return;
 
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const content = await fileToBase64(selectedFile);
-      await createMutation.mutateAsync({
-        data: {
-          name: newDocName,
-          filename: selectedFile.name,
-          mimeType: selectedFile.type || "application/pdf",
-          content,
-          type: activeTab === "signature" ? "catalog" : activeTab,
-          isActive: true,
-          assignedUserIds: [], // Start with empty assignments
-        }
-      });
+      const maxDirectSize = 2 * 1024 * 1024; // 2MB
+      if (selectedFile.size > maxDirectSize) {
+        await uploadFileInChunks(selectedFile, newDocName, activeTab, (pct) => {
+          setUploadProgress(pct);
+        });
+      } else {
+        const content = await fileToBase64(selectedFile);
+        await createMutation.mutateAsync({
+          data: {
+            name: newDocName,
+            filename: selectedFile.name,
+            mimeType: selectedFile.type || "application/pdf",
+            content,
+            type: activeTab === "signature" ? "catalog" : activeTab,
+            isActive: true,
+            assignedUserIds: [], // Start with empty assignments
+          }
+        });
+      }
       refresh();
       setIsUploadOpen(false);
       setSelectedFile(null);
       setNewDocName("");
       toast({
         title: "Document uploaded",
-        description: `"${newDocName}" is now registered.`,
+        description: `"${newDocName}" has been uploaded successfully.`,
       });
     } catch (err: any) {
       toast({
@@ -347,6 +421,7 @@ export default function Documents() {
       });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -784,8 +859,23 @@ export default function Documents() {
               />
             </div>
 
+            {uploading && (
+              <div className="space-y-2 pt-2 pb-1">
+                <div className="flex justify-between text-xs font-semibold text-primary">
+                  <span>Uploading files in secure chunks...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border">
+                  <div 
+                    className="h-full bg-blue-600 transition-all duration-300 rounded-full" 
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <DialogFooter className="pt-2 gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)} disabled={uploading}>
                 Cancel
               </Button>
               <Button type="submit" disabled={uploading || !selectedFile}>
