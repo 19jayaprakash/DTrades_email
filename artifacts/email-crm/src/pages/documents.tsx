@@ -37,21 +37,16 @@ async function uploadToCloudinary(
   file: File,
   onProgress: (pct: number) => void
 ): Promise<string> {
+  // Unsigned preset — safe to include directly in client code
   const cloudName = 
     (import.meta as any).env?.VITE_CLOUDINARY_CLOUD_NAME || 
     (import.meta as any).env?.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
-    (typeof process !== "undefined" && (process as any).env?.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME);
+    "drni46zvq";  // Cloudinary cloud name
 
   const uploadPreset = 
     (import.meta as any).env?.VITE_CLOUDINARY_UPLOAD_PRESET || 
     (import.meta as any).env?.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
-    (typeof process !== "undefined" && (process as any).env?.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
-
-  if (!cloudName || !uploadPreset) {
-    throw new Error(
-      "Cloudinary settings are missing. Please add VITE_CLOUDINARY_CLOUD_NAME or NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME to your environment variables."
-    );
-  }
+    "dtrades_preset";  // Unsigned upload preset
 
   const formData = new FormData();
   formData.append("file", file);
