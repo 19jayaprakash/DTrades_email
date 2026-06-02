@@ -19,6 +19,7 @@ export const emailLogsTable = pgTable("email_logs", {
   errorMessage: text("error_message"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  scheduledAt: timestamp("scheduled_at").notNull().defaultNow(),
 });
 
 export const insertEmailLogSchema = createInsertSchema(emailLogsTable).omit({ id: true, createdAt: true });
