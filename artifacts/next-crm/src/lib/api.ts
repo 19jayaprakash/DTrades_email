@@ -8,6 +8,7 @@ export function setupApi() {
     return null;
   });
 
-  setBaseUrl("/api");
+  // Under unified Next.js, API routes already start with /api, so we don't prepend it again
+  setBaseUrl("");
 }
 
