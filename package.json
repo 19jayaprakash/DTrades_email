@@ -6,7 +6,7 @@
     "preinstall": "node -e \"if (process.platform === 'win32') console.log('Windows mode')\"",
     "dev": "node --env-file=.env -e \"process.env.NODE_ENV='development'\" && pnpm run build && pnpm run start",
     "start": "pnpm -r --parallel --if-present run start",
-    "start:api": "node artifacts/api-server/dist/index.mjs",
+    "start:api": "node --max-old-space-size=400 artifacts/api-server/dist/index.mjs",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
