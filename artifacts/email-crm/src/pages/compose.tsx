@@ -2,7 +2,9 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import {
   useListAccounts, getListAccountsQueryKey,
   useListTemplates, getListTemplatesQueryKey,
-  useSendEmails
+  useSendEmails,
+  useListAttachments,
+  getListAttachmentsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,7 @@ const composeSchema = z.object({
   templateId: z.coerce.number().min(1, "Please select a template"),
   subject: z.string().min(1, "Subject is required"),
   recipients: z.string().min(1, "Please provide at least one recipient"),
+  selectedCatalogId: z.coerce.number().optional().nullable(),
 });
 
 type ComposeValues = z.infer<typeof composeSchema>;
@@ -44,8 +47,14 @@ export default function Compose() {
       templateId: 0,
       subject: "",
       recipients: "",
+      selectedCatalogId: null,
     }
   });
+
+  const { data: userAttachments, isLoading: attachmentsLoading } = useListAttachments(
+    { userId: user?.id },
+    { query: { queryKey: getListAttachmentsQueryKey({ userId: user?.id }), enabled: !!user?.id } }
+  );
 
   const accounts = isAdmin
     ? allAccounts?.filter(a => a.isActive)
@@ -64,7 +73,14 @@ export default function Compose() {
   const onSubmit = async (data: ComposeValues) => {
     try {
       const res = await sendMutation.mutateAsync({
-        data: { ...data, delaySeconds: 2 }
+        data: {
+          accountId: data.accountId,
+          templateId: data.templateId,
+          subject: data.subject,
+          recipients: data.recipients,
+          delaySeconds: 0,
+          selectedCatalogId: data.selectedCatalogId === 0 ? null : data.selectedCatalogId,
+        } as any
       });
       toast({
         title: "Emails sent",
@@ -75,6 +91,7 @@ export default function Compose() {
         templateId: data.templateId,
         subject: data.subject,
         recipients: "",
+        selectedCatalogId: null,
       });
     } catch (e: any) {
       toast({
@@ -211,12 +228,95 @@ export default function Compose() {
                 </CardContent>
               </Card>
 
-              <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-3 border">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Paperclip className="h-4 w-4" />
-                  <span>Terms &amp; Conditions and Brochure will be attached automatically</span>
-                </div>
-                <Button type="submit" disabled={sendMutation.isPending} className="min-w-[120px]">
+              {/* Attachments zone */}
+              <Card className="border-primary/10 shadow-xs bg-slate-50/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4 text-primary animate-pulse" />
+                    Campaign Attachment Settings
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Visual catalogs and regulatory terms assigned to your regional profile.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {attachmentsLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      <span>Retrieving assigned documents...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-3">
+                      {/* Left Box - Terms & Conditions (Auto Attached) */}
+                      <div className="space-y-2 border-r pr-4">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                          📋 Regulatory Terms (Auto-Attached)
+                        </span>
+                        {(userAttachments || []).filter(att => (att as any).type === "terms").length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {(userAttachments || [])
+                              .filter(att => (att as any).type === "terms")
+                              .map(att => (
+                                <Badge key={att.id} variant="secondary" className="text-xs bg-white border border-slate-200 text-slate-700 font-medium px-2.5 py-1 shadow-2xs">
+                                  📄 {att.name}
+                                </Badge>
+                              ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic pt-1">
+                            No terms & conditions active for your profile.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Right Box - Selectable Product Catalog */}
+                      <div className="space-y-2 pl-2">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                          🌾 Select Regional Catalog (Choose One)
+                        </span>
+                        {(userAttachments || []).filter(att => (att as any).type === "catalog").length > 0 ? (
+                          <FormField
+                            control={form.control}
+                            name="selectedCatalogId"
+                            render={({ field }) => (
+                              <FormItem className="space-y-1">
+                                <Select 
+                                  onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} 
+                                  value={field.value ? field.value.toString() : "none"}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white h-9 text-xs">
+                                      <SelectValue placeholder="Select regional brochure..." />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="none">None (No Catalog Attached)</SelectItem>
+                                    {(userAttachments || [])
+                                      .filter(att => (att as any).type === "catalog")
+                                      .map(c => (
+                                        <SelectItem key={c.id} value={c.id.toString()} className="text-xs">
+                                          📖 {c.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic pt-2">
+                            No catalogs assigned to your profile.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end bg-slate-50/80 rounded-lg px-5 py-4 border gap-4">
+                <Button type="submit" disabled={sendMutation.isPending} className="min-w-[140px] shadow-sm">
                   {sendMutation.isPending
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
                     : <><Send className="mr-2 h-4 w-4" />Send Emails</>

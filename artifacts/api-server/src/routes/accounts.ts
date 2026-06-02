@@ -13,9 +13,11 @@ const safeAccount = (a: typeof accountsTable.$inferSelect) => ({
   smtpHost: a.smtpHost,
   smtpPort: a.smtpPort,
   smtpUser: a.smtpUser,
+  smtpPass: a.smtpPass,
   isActive: a.isActive,
   dailyLimit: a.dailyLimit,
   sentToday: a.sentToday,
+  signature: a.signature,
   createdAt: a.createdAt,
 });
 
@@ -25,7 +27,7 @@ router.get("/accounts", requireAuth, async (req, res) => {
 });
 
 router.post("/accounts", requireAuth, requireAdmin, async (req, res) => {
-  const { name, email, region, smtpHost, smtpPort, smtpUser, smtpPass, dailyLimit } = req.body;
+  const { name, email, region, smtpHost, smtpPort, smtpUser, smtpPass, dailyLimit, signature } = req.body;
   if (!name || !email || !region || !smtpHost || !smtpUser || !smtpPass) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -39,6 +41,7 @@ router.post("/accounts", requireAuth, requireAdmin, async (req, res) => {
     smtpUser,
     smtpPass,
     dailyLimit: dailyLimit || 500,
+    signature: signature || null,
   }).returning();
   res.status(201).json(safeAccount(account));
 });
@@ -55,7 +58,7 @@ router.get("/accounts/:id", requireAuth, async (req, res) => {
 
 router.patch("/accounts/:id", requireAuth, requireAdmin, async (req, res) => {
   const id = parseInt(req.params["id"] as string);
-  const { name, email, region, smtpHost, smtpPort, smtpUser, smtpPass, isActive, dailyLimit } = req.body;
+  const { name, email, region, smtpHost, smtpPort, smtpUser, smtpPass, isActive, dailyLimit, signature } = req.body;
   const updates: Record<string, unknown> = {};
   if (name !== undefined) updates.name = name;
   if (email !== undefined) updates.email = email;
@@ -66,6 +69,7 @@ router.patch("/accounts/:id", requireAuth, requireAdmin, async (req, res) => {
   if (smtpPass !== undefined) updates.smtpPass = smtpPass;
   if (isActive !== undefined) updates.isActive = isActive;
   if (dailyLimit !== undefined) updates.dailyLimit = dailyLimit;
+  if (signature !== undefined) updates.signature = signature;
   const [account] = await db.update(accountsTable).set(updates).where(eq(accountsTable.id, id)).returning();
   if (!account) {
     res.status(404).json({ error: "Account not found" });

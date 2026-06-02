@@ -14,6 +14,7 @@ export const accountsTable = pgTable("accounts", {
   isActive: boolean("is_active").notNull().default(true),
   dailyLimit: integer("daily_limit").notNull().default(500),
   sentToday: integer("sent_today").notNull().default(0),
+  signature: text("signature"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

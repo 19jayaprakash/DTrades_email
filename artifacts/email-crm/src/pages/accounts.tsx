@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Edit2, Trash2 } from "lucide-react";
+import { Loader2, Plus, Edit2, Trash2, Eye, EyeOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
@@ -18,6 +18,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -29,6 +30,7 @@ const accountSchema = z.object({
   smtpPass: z.string().optional(),
   dailyLimit: z.coerce.number().optional(),
   isActive: z.boolean().optional(),
+  signature: z.string().optional(),
 });
 
 type AccountFormValues = z.infer<typeof accountSchema>;
@@ -46,6 +48,7 @@ export default function Accounts() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
@@ -53,12 +56,13 @@ export default function Accounts() {
       name: "",
       email: "",
       region: "",
-      smtpHost: "",
+      smtpHost: "smtp.gmail.com",
       smtpPort: 587,
       smtpUser: "",
       smtpPass: "",
       dailyLimit: 500,
       isActive: true,
+      signature: "",
     }
   });
 
@@ -84,7 +88,8 @@ export default function Accounts() {
           id: editingId, 
           data: {
             ...data,
-            ...(data.smtpPass ? { smtpPass: data.smtpPass } : { smtpPass: undefined })
+            ...(data.smtpPass ? { smtpPass: data.smtpPass } : { smtpPass: undefined }),
+            signature: data.signature || "",
           }
         });
         toast({ title: "Account updated successfully" });
@@ -97,6 +102,7 @@ export default function Accounts() {
           data: {
             ...data,
             smtpPass: data.smtpPass,
+            signature: data.signature || "",
           }
         });
         toast({ title: "Account created successfully" });
@@ -117,9 +123,10 @@ export default function Accounts() {
       smtpHost: acc.smtpHost,
       smtpPort: acc.smtpPort,
       smtpUser: acc.smtpUser || "",
-      smtpPass: "",
+      smtpPass: acc.smtpPass || "",
       dailyLimit: acc.dailyLimit || 500,
       isActive: acc.isActive,
+      signature: acc.signature || "",
     });
     setDialogOpen(true);
   };
@@ -130,12 +137,13 @@ export default function Accounts() {
       name: "",
       email: "",
       region: "",
-      smtpHost: "",
+      smtpHost: "smtp.gmail.com",
       smtpPort: 587,
       smtpUser: "",
       smtpPass: "",
       dailyLimit: 500,
       isActive: true,
+      signature: "",
     });
     setDialogOpen(true);
   };
@@ -184,9 +192,49 @@ export default function Accounts() {
                       <FormItem><FormLabel>SMTP User</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="smtpPass" render={({ field }) => (
-                      <FormItem><FormLabel>{editingId ? "New SMTP Password" : "SMTP Password"}</FormLabel><FormControl><Input type="password" {...field} /></FormControl><FormMessage /></FormItem>
+                      <FormItem>
+                        <FormLabel>{editingId ? "New SMTP Password" : "SMTP Password"}</FormLabel>
+                        <div className="relative">
+                          <FormControl>
+                            <Input 
+                              type={showSmtpPass ? "text" : "password"} 
+                              {...field} 
+                              className="pr-10"
+                            />
+                          </FormControl>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                            onClick={() => setShowSmtpPass(!showSmtpPass)}
+                          >
+                            {showSmtpPass ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
                     )} />
                   </div>
+
+                  <FormField control={form.control} name="signature" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email Signature (HTML/Text)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          {...field} 
+                          placeholder="Warm regards,<br><b>John Smith</b><br>Sales Manager..."
+                          className="min-h-[100px] font-mono text-sm" 
+                        />
+                      </FormControl>
+                      <span className="text-[11px] text-muted-foreground block mt-0.5">HTML formatting is fully supported. Leave blank to default to the standard corporate signature.</span>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
 
                   {editingId && (
                     <FormField
@@ -263,7 +311,9 @@ export default function Accounts() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{acc.smtpHost}:{acc.smtpPort}</div>
-                        <div className="text-xs text-muted-foreground">{acc.smtpUser}</div>
+                        <div className="text-xs text-muted-foreground">
+                          User: {acc.smtpUser} • Pass: {acc.smtpPass ? "••••••••" : "Not Set"}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

@@ -4,17 +4,15 @@ import { Redirect } from "wouter";
 import {
   useListUsers, getListUsersQueryKey,
   useDeleteUser, useCreateUser, useUpdateUser,
-  useListAttachments, getListAttachmentsQueryKey,
-  useCreateAttachment, useDeleteAttachment,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Plus, Edit2, Trash2, Paperclip, FileText, File, Upload, X } from "lucide-react";
+import { Loader2, Plus, Edit2, Trash2, Eye, EyeOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -32,6 +30,11 @@ const userSchema = z.object({
   region: z.string().optional(),
   password: z.string().optional(),
   isActive: z.boolean().optional(),
+  smtpHost: z.string().optional(),
+  smtpPort: z.coerce.number().optional(),
+  smtpUser: z.string().optional(),
+  smtpPass: z.string().optional(),
+  dailyLimit: z.coerce.number().optional(),
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -45,176 +48,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-const FILE_SLOTS = [
-  { label: "Terms & Conditions", key: "tnc" },
-  { label: "Brochure / Catalogue", key: "brochure" },
-];
 
-function UserFilesDialog({
-  userId,
-  userName,
-  open,
-  onClose,
-}: {
-  userId: number;
-  userName: string;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const fileRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
-  const [uploading, setUploading] = useState<number | null>(null);
-
-  const { data: attachments, isLoading } = useListAttachments(
-    { userId },
-    { query: { queryKey: getListAttachmentsQueryKey({ userId }), enabled: open } }
-  );
-  const createMutation = useCreateAttachment();
-  const deleteMutation = useDeleteAttachment();
-
-  const refresh = () => queryClient.invalidateQueries({ queryKey: getListAttachmentsQueryKey({ userId }) });
-
-  const handleUpload = async (slotIndex: number, file: File) => {
-    setUploading(slotIndex);
-    try {
-      const slotLabel = FILE_SLOTS[slotIndex].label;
-      const existing = attachments?.find(a =>
-        a.name.toLowerCase().includes(slotIndex === 0 ? "terms" : "brochure") ||
-        a.name === slotLabel
-      );
-      if (existing) {
-        await deleteMutation.mutateAsync({ id: existing.id });
-      }
-      const content = await fileToBase64(file);
-      await createMutation.mutateAsync({
-        data: {
-          userId,
-          name: slotLabel,
-          filename: file.name,
-          mimeType: file.type || "application/pdf",
-          content,
-          isActive: true,
-        }
-      });
-      refresh();
-      toast({ title: `${slotLabel} uploaded`, description: `Attached to ${userName}'s emails.` });
-    } catch (e: any) {
-      toast({ title: "Upload failed", description: e.error || "An error occurred", variant: "destructive" });
-    } finally {
-      setUploading(null);
-    }
-  };
-
-  const handleRemove = async (id: number, name: string) => {
-    try {
-      await deleteMutation.mutateAsync({ id });
-      refresh();
-      toast({ title: `${name} removed` });
-    } catch {
-      toast({ title: "Failed to remove", variant: "destructive" });
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Paperclip className="h-4 w-4 text-primary" />
-            Attachments for {userName}
-          </DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground -mt-1">
-          These files will be attached automatically to every email sent by this user.
-        </p>
-
-        {isLoading ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-        ) : (
-          <div className="space-y-3 py-2">
-            {FILE_SLOTS.map((slot, idx) => {
-              const existing = attachments?.find(a =>
-                a.name === slot.label ||
-                a.name.toLowerCase().includes(idx === 0 ? "terms" : "brochure")
-              );
-              return (
-                <div key={slot.key} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{slot.label}</span>
-                    </div>
-                    {existing && (
-                      <Badge variant="secondary" className="text-xs">Uploaded</Badge>
-                    )}
-                  </div>
-
-                  {existing ? (
-                    <div className="flex items-center justify-between bg-muted/50 rounded-md px-3 py-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <File className="h-3.5 w-3.5 text-primary flex-shrink-0" />
-                        <span className="text-xs text-foreground truncate">{existing.filename}</span>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                        <button
-                          className="text-xs text-muted-foreground hover:text-foreground underline mr-1"
-                          onClick={() => fileRefs[idx].current?.click()}
-                          disabled={uploading === idx}
-                        >
-                          Replace
-                        </button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleRemove(existing.id, existing.name)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      className="w-full border-2 border-dashed border-border rounded-md py-4 flex flex-col items-center gap-1.5 hover:border-primary/40 hover:bg-accent/30 transition-colors"
-                      onClick={() => fileRefs[idx].current?.click()}
-                      disabled={uploading === idx}
-                    >
-                      {uploading === idx ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      ) : (
-                        <Upload className="h-4 w-4 text-muted-foreground/60" />
-                      )}
-                      <span className="text-xs text-muted-foreground">
-                        {uploading === idx ? "Uploading..." : "Click to upload PDF"}
-                      </span>
-                    </button>
-                  )}
-
-                  <input
-                    ref={fileRefs[idx]}
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) handleUpload(idx, file);
-                      e.target.value = "";
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button onClick={onClose}>Done</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export default function Users() {
   const { user } = useAuth();
@@ -228,12 +62,36 @@ export default function Users() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [filesDialogUser, setFilesDialogUser] = useState<{ id: number; name: string } | null>(null);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [visiblePasswordId, setVisiblePasswordId] = useState<number | null>(null);
+
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
-    defaultValues: { name: "", email: "", role: "user", region: "", password: "", isActive: true }
+    defaultValues: {
+      name: "",
+      email: "",
+      role: "user",
+      region: "",
+      password: "",
+      isActive: true,
+      smtpHost: "smtp.gmail.com",
+      smtpPort: 587,
+      smtpUser: "",
+      smtpPass: "",
+      dailyLimit: 500,
+    }
   });
+
+  const emailValue = form.watch("email");
+  const { setValue } = form;
+
+  useEffect(() => {
+    if (emailValue) {
+      setValue("smtpUser", emailValue);
+    }
+  }, [emailValue, setValue]);
 
   if (user?.role !== "admin") return <Redirect to="/compose" />;
 
@@ -250,14 +108,23 @@ export default function Users() {
 
   const onSubmit = async (data: UserFormValues) => {
     try {
+      const payload = {
+        name: data.name,
+        role: data.role,
+        region: data.region,
+        isActive: data.isActive,
+        smtpHost: data.smtpHost || null,
+        smtpPort: data.smtpPort || null,
+        smtpUser: data.smtpUser || null,
+        ...(data.smtpPass ? { smtpPass: data.smtpPass } : {}),
+        dailyLimit: data.dailyLimit || null,
+      };
+
       if (editingId) {
         await updateMutation.mutateAsync({
           id: editingId,
           data: {
-            name: data.name,
-            role: data.role,
-            region: data.region,
-            isActive: data.isActive,
+            ...payload,
             ...(data.password ? { password: data.password } : {})
           }
         });
@@ -268,7 +135,11 @@ export default function Users() {
           return;
         }
         await createMutation.mutateAsync({
-          data: { email: data.email, name: data.name, password: data.password, role: data.role, region: data.region }
+          data: {
+            ...payload,
+            email: data.email,
+            password: data.password,
+          }
         });
         toast({ title: "User created" });
       }
@@ -281,13 +152,37 @@ export default function Users() {
 
   const openEdit = (u: any) => {
     setEditingId(u.id);
-    form.reset({ name: u.name, email: u.email, role: u.role, region: u.region || "", password: "", isActive: u.isActive });
+    form.reset({
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      region: u.region || "",
+      password: "",
+      isActive: u.isActive,
+      smtpHost: u.smtpHost || "",
+      smtpPort: u.smtpPort || 587,
+      smtpUser: u.smtpUser || "",
+      smtpPass: u.smtpPass || "",
+      dailyLimit: u.dailyLimit || 500,
+    });
     setDialogOpen(true);
   };
 
   const openCreate = () => {
     setEditingId(null);
-    form.reset({ name: "", email: "", role: "user", region: "", password: "", isActive: true });
+    form.reset({
+      name: "",
+      email: "",
+      role: "user",
+      region: "",
+      password: "",
+      isActive: true,
+      smtpHost: "smtp.gmail.com",
+      smtpPort: 587,
+      smtpUser: "",
+      smtpPass: "",
+      dailyLimit: 500,
+    });
     setDialogOpen(true);
   };
 
@@ -321,12 +216,13 @@ export default function Users() {
                     <TableHead>Role</TableHead>
                     <TableHead>Region</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Attachments</TableHead>
+                    <TableHead>Password</TableHead>
+                    <TableHead>SMTP</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users?.map((u) => (
+                  {users?.map((u: any) => (
                     <TableRow key={u.id}>
                       <TableCell>
                         <div className="font-medium text-sm">{u.name}</div>
@@ -344,15 +240,37 @@ export default function Users() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1.5"
-                          onClick={() => setFilesDialogUser({ id: u.id, name: u.name })}
-                        >
-                          <Paperclip className="h-3 w-3" />
-                          Manage Files
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-mono">
+                            {visiblePasswordId === u.id
+                              ? (u.passwordPlain || <span className="text-muted-foreground italic">Not set</span>)
+                              : (u.passwordPlain ? "••••••••" : <span className="text-muted-foreground italic">—</span>)}
+                          </span>
+                          {u.passwordPlain && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => setVisiblePasswordId(visiblePasswordId === u.id ? null : u.id)}
+                            >
+                              {visiblePasswordId === u.id
+                                ? <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+                                : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {u.smtpHost ? (
+                          <div className="text-xs">
+                            <div className="font-medium">{u.smtpHost}:{u.smtpPort}</div>
+                            <div className="text-muted-foreground mt-0.5">
+                              User: {u.smtpUser} • Pass: {u.smtpPass ? "••••••••" : "Not Set"}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">No SMTP configured</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -386,7 +304,7 @@ export default function Users() {
             <DialogTitle>{editingId ? "Edit User" : "Create User"}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 max-h-[80vh] overflow-y-auto px-1 pb-1">
               <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem><FormLabel>Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
               )} />
@@ -414,10 +332,85 @@ export default function Users() {
               <FormField control={form.control} name="password" render={({ field }) => (
                 <FormItem>
                   <FormLabel>{editingId ? "New Password (Optional)" : "Password"}</FormLabel>
-                  <FormControl><Input type="password" {...field} /></FormControl>
+                  <div className="relative">
+                    <FormControl>
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        {...field}
+                        className="pr-10"
+                      />
+                    </FormControl>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                    </Button>
+                  </div>
                   <FormMessage />
                 </FormItem>
               )} />
+              
+              <div className="border-t pt-4 mt-4 space-y-4">
+                <h4 className="text-sm font-semibold text-foreground">SMTP Sender settings (Optional)</h4>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2">
+                    <FormField control={form.control} name="smtpHost" render={({ field }) => (
+                      <FormItem><FormLabel>SMTP Host</FormLabel><FormControl><Input {...field} placeholder="smtp.gmail.com" autoComplete="new-password" /></FormControl><FormMessage /></FormItem>
+                    )} />
+                  </div>
+                  <div>
+                    <FormField control={form.control} name="smtpPort" render={({ field }) => (
+                      <FormItem><FormLabel>SMTP Port</FormLabel><FormControl><Input type="number" {...field} placeholder="587" autoComplete="new-password" /></FormControl><FormMessage /></FormItem>
+                    )} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={form.control} name="smtpUser" render={({ field }) => (
+                    <FormItem><FormLabel>SMTP Username</FormLabel><FormControl><Input {...field} placeholder="user@gmail.com" autoComplete="new-password" /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="smtpPass" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>SMTP Password</FormLabel>
+                      <div className="relative">
+                        <FormControl>
+                          <Input 
+                            type={showSmtpPass ? "text" : "password"} 
+                            {...field} 
+                            placeholder="Password" 
+                            autoComplete="new-password" 
+                            className="pr-10"
+                          />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                          onClick={() => setShowSmtpPass(!showSmtpPass)}
+                        >
+                          {showSmtpPass ? (
+                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
+
+                <FormField control={form.control} name="dailyLimit" render={({ field }) => (
+                  <FormItem><FormLabel>Daily Send Limit</FormLabel><FormControl><Input type="number" {...field} placeholder="500" autoComplete="new-password" /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+
               {editingId && (
                 <FormField control={form.control} name="isActive" render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-3">
@@ -426,7 +419,7 @@ export default function Users() {
                   </FormItem>
                 )} />
               )}
-              <DialogFooter>
+              <DialogFooter className="pt-2">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
                   {(createMutation.isPending || updateMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -438,15 +431,7 @@ export default function Users() {
         </DialogContent>
       </Dialog>
 
-      {/* Per-user file management dialog */}
-      {filesDialogUser && (
-        <UserFilesDialog
-          userId={filesDialogUser.id}
-          userName={filesDialogUser.name}
-          open={!!filesDialogUser}
-          onClose={() => setFilesDialogUser(null)}
-        />
-      )}
+
     </AppLayout>
   );
 }

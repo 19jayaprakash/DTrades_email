@@ -381,7 +381,7 @@ paths:
       parameters:
         - name: userId
           in: query
-          required: true
+          required: false
           schema:
             type: integer
       responses:
@@ -733,12 +733,16 @@ components:
           type: integer
         smtpUser:
           type: string
+        smtpPass:
+          type: string
         isActive:
           type: boolean
         dailyLimit:
           type: integer
         sentToday:
           type: integer
+        signature:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -764,6 +768,8 @@ components:
           type: string
         dailyLimit:
           type: integer
+        signature:
+          type: ["string", "null"]
 
     AccountUpdate:
       type: object
@@ -786,6 +792,8 @@ components:
           type: boolean
         dailyLimit:
           type: integer
+        signature:
+          type: ["string", "null"]
 
     Template:
       type: object
@@ -853,30 +861,15 @@ components:
 
     Attachment:
       type: object
-      required: [id, userId, name, filename, mimeType, isActive, createdAt]
+      required: [id, name, filename, mimeType, isActive, createdAt]
       properties:
         id:
           type: integer
         userId:
           type: integer
-        name:
+        type:
           type: string
-        filename:
-          type: string
-        mimeType:
-          type: string
-        isActive:
-          type: boolean
-        createdAt:
-          type: string
-          format: date-time
-
-    AttachmentInput:
-      type: object
-      required: [userId, name, filename, mimeType, content]
-      properties:
-        userId:
-          type: integer
+          enum: [terms, catalog, signature, signature_banner]
         name:
           type: string
         filename:
@@ -888,14 +881,53 @@ components:
           description: "Base64 encoded file content"
         isActive:
           type: boolean
+        assignedUserIds:
+          type: array
+          items:
+            type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    AttachmentInput:
+      type: object
+      required: [name, filename, mimeType, content]
+      properties:
+        userId:
+          type: integer
+        type:
+          type: string
+          enum: [terms, catalog, signature, signature_banner]
+        name:
+          type: string
+        filename:
+          type: string
+        mimeType:
+          type: string
+        content:
+          type: string
+          description: "Base64 encoded file content"
+        isActive:
+          type: boolean
+        assignedUserIds:
+          type: array
+          items:
+            type: integer
 
     AttachmentUpdate:
       type: object
       properties:
         name:
           type: string
+        content:
+          type: string
+          description: "Base64 encoded file content"
         isActive:
           type: boolean
+        assignedUserIds:
+          type: array
+          items:
+            type: integer
 
     SendEmailInput:
       type: object

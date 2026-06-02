@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { signToken, requireAuth } from "../lib/auth";
 
 const router = Router();
@@ -12,7 +12,7 @@ router.post("/auth/login", async (req, res) => {
     res.status(400).json({ error: "Email and password required" });
     return;
   }
-  const users = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const users = await db.select().from(usersTable).where(eq(sql`lower(${usersTable.email})`, email.toLowerCase())).limit(1);
   const user = users[0];
   if (!user || !user.isActive) {
     res.status(401).json({ error: "Invalid credentials" });

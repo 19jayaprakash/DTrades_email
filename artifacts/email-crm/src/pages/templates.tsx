@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 const templateSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -167,7 +168,7 @@ export default function Templates() {
                       <FormItem>
                         <FormLabel>HTML Content</FormLabel>
                         <FormControl>
-                          <Textarea {...field} className="min-h-[300px] font-mono text-sm" />
+                          <RichTextEditor value={field.value || ""} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
