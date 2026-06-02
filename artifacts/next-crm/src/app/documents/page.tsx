@@ -28,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useUploadThing } from "@/utils/uploadthing";
 
 export default function Documents() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -55,10 +55,12 @@ export default function Documents() {
 
   // UploadThing hooks — direct browser-to-CDN upload, up to 64MB
   const { startUpload: startCatalogUpload, isUploading: isCatalogUploading } = useUploadThing("catalogUploader", {
+    headers: () => ({ Authorization: `Bearer ${token}` }),
     onUploadProgress: (pct) => setUploadProgress(pct),
     onUploadError: (err) => { toast({ title: "Upload failed", description: err.message, variant: "destructive" }); },
   });
   const { startUpload: startBannerUpload, isUploading: isBannerUploading } = useUploadThing("bannerUploader", {
+    headers: () => ({ Authorization: `Bearer ${token}` }),
     onUploadProgress: (pct) => setUploadProgress(pct),
     onUploadError: (err) => { toast({ title: "Banner upload failed", description: err.message, variant: "destructive" }); },
   });
