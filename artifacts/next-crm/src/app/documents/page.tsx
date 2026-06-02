@@ -35,6 +35,44 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function resizeAndCompressImage(file: File, maxWidth = 1000, quality = 0.85): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas context not available"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export as JPEG with specified quality
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(dataUrl.split(",")[1]);
+      };
+      img.onerror = reject;
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Documents() {
   const { user } = useAuth();
   const router = useRouter();
@@ -104,7 +142,7 @@ export default function Documents() {
 
     setIsSavingBanner(true);
     try {
-      const base64Content = await fileToBase64(file);
+      const base64Content = await resizeAndCompressImage(file);
       if (customBannerDoc) {
         await updateMutation.mutateAsync({
           id: customBannerDoc.id,
@@ -118,7 +156,7 @@ export default function Documents() {
           data: {
             name: "Custom Signature Banner",
             filename: file.name,
-            mimeType: file.type,
+            mimeType: "image/jpeg", // Converted to JPEG via canvas
             content: base64Content,
             type: "signature_banner",
             isActive: true,
@@ -129,12 +167,12 @@ export default function Documents() {
       refresh();
       toast({
         title: "Banner updated",
-        description: "The custom signature banner has been updated successfully.",
+        description: "The custom signature banner has been optimized and updated successfully.",
       });
     } catch (err: any) {
       toast({
         title: "Upload failed",
-        description: err.error || "An error occurred",
+        description: err.data?.error || err.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
@@ -158,7 +196,7 @@ export default function Documents() {
     } catch (err: any) {
       toast({
         title: "Delete failed",
-        description: err.error || "An error occurred",
+        description: err.data?.error || err.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
@@ -199,6 +237,18 @@ export default function Documents() {
     setIsSavingSig(true);
     try {
       const base64Content = window.btoa(unescape(encodeURIComponent(sigValue)));
+      
+      // Guard against Vercel 4.5MB payload size limit
+      if (base64Content.length > 3 * 1024 * 1024) {
+        toast({
+          title: "Signature size is too large",
+          description: "Your signature template contains high-resolution embedded images. Please use the 'Signature Banner Image' panel on the right to upload images instead of pasting them directly in the text editor, to keep the signature lightweight and functional.",
+          variant: "destructive",
+        });
+        setIsSavingSig(false);
+        return;
+      }
+
       if (signatureDoc) {
         await updateMutation.mutateAsync({
           id: signatureDoc.id,
@@ -227,7 +277,7 @@ export default function Documents() {
     } catch (err: any) {
       toast({
         title: "Failed to save signature",
-        description: err.error || "An error occurred",
+        description: err.data?.error || err.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
@@ -292,7 +342,7 @@ export default function Documents() {
     } catch (err: any) {
       toast({
         title: "Upload failed",
-        description: err.error || "An error occurred",
+        description: err.data?.error || err.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
