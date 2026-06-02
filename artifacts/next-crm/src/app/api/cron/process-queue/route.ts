@@ -57,8 +57,8 @@ function classifyError(err: Error): { errorType: "smtp_failed" | "invalid_email"
   return { errorType: "smtp_failed", message: err.message };
 }
 
-async function getUserAttachments(userId: number, selectedCatalogId?: number | null): Promise<NmAttachment[]> {
-  const termsRows = await db
+async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
+  const rows = await db
     .select({
       filename: attachmentsTable.filename,
       content: attachmentContentsTable.content,
@@ -71,11 +71,11 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number | n
       and(
         eq(userAttachmentsTable.userId, userId),
         eq(attachmentsTable.isActive, true),
-        eq(attachmentsTable.type, "terms")
+        sql`${attachmentsTable.type} IN ('terms', 'catalog')`
       )
     );
 
-  const result: NmAttachment[] = termsRows.map(r => {
+  return rows.map(r => {
     const decompressed = decompressContent(r.content) || "";
     return {
       filename: r.filename,
@@ -83,37 +83,6 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number | n
       contentType: r.mimeType,
     };
   });
-
-  if (selectedCatalogId) {
-    const catalogRows = await db
-      .select({
-        filename: attachmentsTable.filename,
-        content: attachmentContentsTable.content,
-        mimeType: attachmentsTable.mimeType,
-      })
-      .from(attachmentsTable)
-      .innerJoin(attachmentContentsTable, eq(attachmentContentsTable.attachmentId, attachmentsTable.id))
-      .innerJoin(userAttachmentsTable, eq(userAttachmentsTable.attachmentId, attachmentsTable.id))
-      .where(
-        and(
-          eq(userAttachmentsTable.userId, userId),
-          eq(attachmentsTable.isActive, true),
-          eq(attachmentsTable.id, selectedCatalogId)
-        )
-      )
-      .limit(1);
-
-    for (const r of catalogRows) {
-      const decompressed = decompressContent(r.content) || "";
-      result.push({
-        filename: r.filename,
-        content: Buffer.from(decompressed, "base64"),
-        contentType: r.mimeType,
-      });
-    }
-  }
-
-  return result;
 }
 
 // GET or POST /api/cron/process-queue
@@ -227,8 +196,17 @@ export async function GET(req: Request) {
     }
 
     const signatureBannerCid = "signature_banner_image";
+    const bannerHtml = `
+      <div style="margin-top: 15px;">
+        <img src="cid:${signatureBannerCid}" alt="D Trades Spices & Ingredients" style="width: 100%; max-width: 600px; display: block;" />
+      </div>
+    `;
+
     const signatureHtml = account.signature
-      ? `<br><br><div style="font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.5; margin-top: 20px;">${account.signature}</div>`
+      ? `<br><br><div style="font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.5; margin-top: 20px;">
+          ${account.signature}
+          ${bannerHtml}
+         </div>`
       : (globalSignatureHtml || `
         <br><br>
         <div style="font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.5; margin-top: 20px;">
@@ -238,9 +216,7 @@ export async function GET(req: Request) {
           <p style="margin: 0 0 4px; color: #555555; font-size: 13px;">📞 +91 7708194433</p>
           <p style="margin: 0 0 4px; color: #555555; font-size: 13px;">🌐 <a href="https://dtradesinternational.in" target="_blank" style="color: #c47a1b; text-decoration: none;">dtradesinternational.in</a></p>
           <p style="margin: 0 0 16px; color: #555555; font-size: 13px;">✉️ <a href="mailto:dtradesinternational@gmail.com" style="color: #c47a1b; text-decoration: none;">dtradesinternational@gmail.com</a></p>
-          <div style="margin-top: 15px;">
-            <img src="cid:${signatureBannerCid}" alt="D Trades Spices & Ingredients" style="width: 100%; max-width: 600px; display: block;" />
-          </div>
+          ${bannerHtml}
         </div>
       `);
 
@@ -263,28 +239,26 @@ export async function GET(req: Request) {
       .where(eq(usersTable.email, account.email))
       .limit(1);
 
-    const attachments = await getUserAttachments(associatedUser ? associatedUser.id : 0, pendingEmail.templateId ? 33 : null); // Re-uses catalog mapping
+    const attachments = await getUserAttachments(associatedUser ? associatedUser.id : 0);
 
     const mailAttachments = [...attachments];
-    if (!account.signature) {
-      if (customBannerRow) {
+    if (customBannerRow) {
+      mailAttachments.push({
+        filename: customBannerRow.filename,
+        content: Buffer.from(customBannerRow.content, "base64"),
+        contentType: customBannerRow.mimeType,
+        cid: signatureBannerCid
+      } as any);
+    } else {
+      // Fallback signature banner
+      const bannerPath = path.join(process.cwd(), "public/export_masala.png");
+      if (fs.existsSync(bannerPath)) {
         mailAttachments.push({
-          filename: customBannerRow.filename,
-          content: Buffer.from(customBannerRow.content, "base64"),
-          contentType: customBannerRow.mimeType,
+          filename: "signature_banner.png",
+          content: fs.readFileSync(bannerPath),
+          contentType: "image/png",
           cid: signatureBannerCid
         } as any);
-      } else {
-        // Fallback signature banner
-        const bannerPath = path.join(process.cwd(), "public/export_masala.png");
-        if (fs.existsSync(bannerPath)) {
-          mailAttachments.push({
-            filename: "signature_banner.png",
-            content: fs.readFileSync(bannerPath),
-            contentType: "image/png",
-            cid: signatureBannerCid
-          } as any);
-        }
       }
     }
 

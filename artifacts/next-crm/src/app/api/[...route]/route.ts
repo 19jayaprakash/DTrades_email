@@ -279,6 +279,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ route: s
             errorMessage: emailLogsTable.errorMessage,
             sentAt: emailLogsTable.sentAt,
             createdAt: emailLogsTable.createdAt,
+            scheduledAt: emailLogsTable.scheduledAt,
           })
           .from(emailLogsTable)
           .leftJoin(accountsTable, eq(emailLogsTable.accountId, accountsTable.id))
