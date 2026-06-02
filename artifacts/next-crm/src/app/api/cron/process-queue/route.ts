@@ -57,6 +57,19 @@ function classifyError(err: Error): { errorType: "smtp_failed" | "invalid_email"
   return { errorType: "smtp_failed", message: err.message };
 }
 
+async function getAttachmentBuffer(contentStr: string | null): Promise<Buffer> {
+  const decompressed = decompressContent(contentStr) || "";
+  if (decompressed.startsWith("http://") || decompressed.startsWith("https://")) {
+    const res = await fetch(decompressed);
+    if (!res.ok) {
+      throw new Error(`Failed to download attachment from URL: ${decompressed}`);
+    }
+    const arrayBuffer = await res.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
+  return Buffer.from(decompressed, "base64");
+}
+
 async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
   const rows = await db
     .select({
@@ -75,14 +88,16 @@ async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
       )
     );
 
-  return rows.map(r => {
-    const decompressed = decompressContent(r.content) || "";
+  const attachmentPromises = rows.map(async r => {
+    const buffer = await getAttachmentBuffer(r.content);
     return {
       filename: r.filename,
-      content: Buffer.from(decompressed, "base64"),
+      content: buffer,
       contentType: r.mimeType,
     };
   });
+
+  return Promise.all(attachmentPromises);
 }
 
 // GET or POST /api/cron/process-queue
@@ -187,7 +202,7 @@ export async function GET(req: Request) {
       if (bannerRow) {
         customBannerRow = {
           filename: bannerRow.filename,
-          content: decompressContent(bannerRow.content) || "",
+          content: bannerRow.content,
           mimeType: bannerRow.mimeType,
         };
       }
@@ -243,9 +258,10 @@ export async function GET(req: Request) {
 
     const mailAttachments = [...attachments];
     if (customBannerRow) {
+      const bannerBuffer = await getAttachmentBuffer(customBannerRow.content);
       mailAttachments.push({
         filename: customBannerRow.filename,
-        content: Buffer.from(customBannerRow.content, "base64"),
+        content: bannerBuffer,
         contentType: customBannerRow.mimeType,
         cid: signatureBannerCid
       } as any);

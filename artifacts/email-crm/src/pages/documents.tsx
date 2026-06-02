@@ -33,6 +33,68 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+async function uploadToCloudinary(
+  file: File,
+  onProgress: (pct: number) => void
+): Promise<string> {
+  const cloudName = 
+    (import.meta as any).env?.VITE_CLOUDINARY_CLOUD_NAME || 
+    (import.meta as any).env?.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
+    (typeof process !== "undefined" && (process as any).env?.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME);
+
+  const uploadPreset = 
+    (import.meta as any).env?.VITE_CLOUDINARY_UPLOAD_PRESET || 
+    (import.meta as any).env?.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
+    (typeof process !== "undefined" && (process as any).env?.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET);
+
+  if (!cloudName || !uploadPreset) {
+    throw new Error(
+      "Cloudinary settings are missing. Please add VITE_CLOUDINARY_CLOUD_NAME or NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME to your environment variables."
+    );
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", uploadPreset);
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const pct = Math.round((event.loaded / event.total) * 100);
+        onProgress(pct);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.secure_url) {
+            resolve(res.secure_url);
+          } else {
+            reject(new Error("Cloudinary response is missing secure_url"));
+          }
+        } catch {
+          reject(new Error("Failed to parse Cloudinary upload response"));
+        }
+      } else {
+        try {
+          const errRes = JSON.parse(xhr.responseText);
+          reject(new Error(errRes.error?.message || `Upload failed with status ${xhr.status}`));
+        } catch {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during Cloudinary upload"));
+    xhr.send(formData);
+  });
+}
+
 export default function Documents() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -44,6 +106,7 @@ export default function Documents() {
   const [newDocName, setNewDocName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Assignment state
   const [assigningDoc, setAssigningDoc] = useState<Attachment | null>(null);
@@ -94,14 +157,18 @@ export default function Documents() {
     }
 
     setIsSavingBanner(true);
+    setUploadProgress(0);
     try {
-      const base64Content = await fileToBase64(file);
+      const secureUrl = await uploadToCloudinary(file, (pct) => {
+        setUploadProgress(pct);
+      });
+
       if (customBannerDoc) {
         await updateMutation.mutateAsync({
           id: customBannerDoc.id,
           data: {
             name: "Custom Signature Banner",
-            content: base64Content,
+            content: secureUrl,
           }
         });
       } else {
@@ -110,7 +177,7 @@ export default function Documents() {
             name: "Custom Signature Banner",
             filename: file.name,
             mimeType: file.type,
-            content: base64Content,
+            content: secureUrl,
             type: "signature_banner",
             isActive: true,
             assignedUserIds: [],
@@ -120,16 +187,17 @@ export default function Documents() {
       refresh();
       toast({
         title: "Banner updated",
-        description: "The custom signature banner has been updated successfully.",
+        description: "The custom signature banner has been uploaded to Cloudinary successfully.",
       });
     } catch (err: any) {
       toast({
         title: "Upload failed",
-        description: err.error || "An error occurred",
+        description: err.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
       setIsSavingBanner(false);
+      setUploadProgress(0);
       if (bannerInputRef.current) bannerInputRef.current.value = "";
     }
   };
@@ -259,14 +327,18 @@ export default function Documents() {
     if (!selectedFile || !newDocName) return;
 
     setUploading(true);
+    setUploadProgress(0);
     try {
-      const content = await fileToBase64(selectedFile);
+      const secureUrl = await uploadToCloudinary(selectedFile, (pct) => {
+        setUploadProgress(pct);
+      });
+
       await createMutation.mutateAsync({
         data: {
           name: newDocName,
           filename: selectedFile.name,
           mimeType: selectedFile.type || "application/pdf",
-          content,
+          content: secureUrl,
           type: activeTab === "signature" ? "catalog" : activeTab,
           isActive: true,
           assignedUserIds: [], // Start with empty assignments
@@ -278,16 +350,17 @@ export default function Documents() {
       setNewDocName("");
       toast({
         title: "Document uploaded",
-        description: `"${newDocName}" is now registered.`,
+        description: `"${newDocName}" has been successfully uploaded to Cloudinary.`,
       });
     } catch (err: any) {
       toast({
         title: "Upload failed",
-        description: err.error || "An error occurred",
+        description: err.message || "An error occurred",
         variant: "destructive",
       });
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -483,7 +556,7 @@ export default function Documents() {
                       <div className="space-y-3">
                         <div className="relative border rounded-lg p-3 bg-slate-50 flex items-center gap-3">
                           <img 
-                            src={`data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}`} 
+                            src={customBannerDoc.content?.startsWith("http") ? customBannerDoc.content : `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content || ""}`} 
                             alt="Custom Banner" 
                             className="h-12 w-20 object-cover rounded border bg-white"
                           />
@@ -510,7 +583,10 @@ export default function Documents() {
                         className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 cursor-pointer transition-colors"
                       >
                         {isSavingBanner ? (
-                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          <div className="flex flex-col items-center gap-1">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            <span className="text-xs font-semibold text-primary">{uploadProgress}%</span>
+                          </div>
                         ) : (
                           <Upload className="h-6 w-6 text-muted-foreground/60" />
                         )}
@@ -562,7 +638,7 @@ export default function Documents() {
                           __html: sigValue.replace(
                             "cid:signature_banner_image", 
                             customBannerDoc?.content 
-                              ? `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}` 
+                              ? (customBannerDoc.content.startsWith("http") ? customBannerDoc.content : `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}`)
                               : "/export_masala.png"
                           ) 
                         }} 
@@ -626,8 +702,23 @@ export default function Documents() {
               />
             </div>
 
+            {uploading && (
+              <div className="space-y-2 pt-2 pb-1">
+                <div className="flex justify-between text-xs font-semibold text-primary">
+                  <span>Uploading to Cloudinary...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border">
+                  <div 
+                    className="h-full bg-blue-600 transition-all duration-300 rounded-full" 
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)} disabled={uploading}>
                 Cancel
               </Button>
               <Button type="submit" disabled={uploading || !selectedFile}>

@@ -73,69 +73,59 @@ function resizeAndCompressImage(file: File, maxWidth = 1000, quality = 0.85): Pr
   });
 }
 
-async function uploadFileInChunks(
+async function uploadToCloudinary(
   file: File,
-  newDocName: string,
-  activeTab: string,
   onProgress: (pct: number) => void
-): Promise<any> {
-  const content = await fileToBase64(file);
-  const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks to stay extremely safe under 4.5MB
-  const totalChunks = Math.ceil(content.length / CHUNK_SIZE);
-  const uploadId = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+): Promise<string> {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, content.length);
-    const chunkContent = content.substring(start, end);
-
-    onProgress(Math.round((i / totalChunks) * 95));
-
-    // Send chunk to API
-    const response = await fetch("/api/attachments/chunk", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        uploadId,
-        chunkIndex: i,
-        content: chunkContent,
-      }),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}));
-      throw new Error(errBody.error || `Chunk ${i} upload failed`);
-    }
+  if (!cloudName || !uploadPreset) {
+    throw new Error(
+      "Cloudinary settings are missing. Please add NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET to your environment variables."
+    );
   }
 
-  onProgress(97);
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", uploadPreset);
 
-  // Send assemble command
-  const assembleResponse = await fetch("/api/attachments/assemble", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      uploadId,
-      name: newDocName,
-      filename: file.name,
-      mimeType: file.type || "application/pdf",
-      type: activeTab === "signature" ? "catalog" : activeTab,
-      isActive: true,
-      assignedUserIds: [],
-    }),
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const pct = Math.round((event.loaded / event.total) * 100);
+        onProgress(pct);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res.secure_url) {
+            resolve(res.secure_url);
+          } else {
+            reject(new Error("Cloudinary response is missing secure_url"));
+          }
+        } catch {
+          reject(new Error("Failed to parse Cloudinary upload response"));
+        }
+      } else {
+        try {
+          const errRes = JSON.parse(xhr.responseText);
+          reject(new Error(errRes.error?.message || `Upload failed with status ${xhr.status}`));
+        } catch {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during Cloudinary upload"));
+    xhr.send(formData);
   });
-
-  if (!assembleResponse.ok) {
-    const errBody = await assembleResponse.json().catch(() => ({}));
-    throw new Error(errBody.error || "Assembly failed");
-  }
-
-  onProgress(100);
-  return assembleResponse.json();
 }
 
 export default function Documents() {
@@ -207,14 +197,18 @@ export default function Documents() {
     }
 
     setIsSavingBanner(true);
+    setUploadProgress(0);
     try {
-      const base64Content = await resizeAndCompressImage(file);
+      const secureUrl = await uploadToCloudinary(file, (pct) => {
+        setUploadProgress(pct);
+      });
+
       if (customBannerDoc) {
         await updateMutation.mutateAsync({
           id: customBannerDoc.id,
           data: {
             name: "Custom Signature Banner",
-            content: base64Content,
+            content: secureUrl,
           }
         });
       } else {
@@ -222,8 +216,8 @@ export default function Documents() {
           data: {
             name: "Custom Signature Banner",
             filename: file.name,
-            mimeType: "image/jpeg", // Converted to JPEG via canvas
-            content: base64Content,
+            mimeType: file.type,
+            content: secureUrl,
             type: "signature_banner",
             isActive: true,
             assignedUserIds: [],
@@ -233,7 +227,7 @@ export default function Documents() {
       refresh();
       toast({
         title: "Banner updated",
-        description: "The custom signature banner has been optimized and updated successfully.",
+        description: "The custom signature banner has been uploaded to Cloudinary successfully.",
       });
     } catch (err: any) {
       toast({
@@ -243,6 +237,7 @@ export default function Documents() {
       });
     } finally {
       setIsSavingBanner(false);
+      setUploadProgress(0);
       if (bannerInputRef.current) bannerInputRef.current.value = "";
     }
   };
@@ -386,32 +381,29 @@ export default function Documents() {
     setUploading(true);
     setUploadProgress(0);
     try {
-      const maxDirectSize = 2 * 1024 * 1024; // 2MB
-      if (selectedFile.size > maxDirectSize) {
-        await uploadFileInChunks(selectedFile, newDocName, activeTab, (pct) => {
-          setUploadProgress(pct);
-        });
-      } else {
-        const content = await fileToBase64(selectedFile);
-        await createMutation.mutateAsync({
-          data: {
-            name: newDocName,
-            filename: selectedFile.name,
-            mimeType: selectedFile.type || "application/pdf",
-            content,
-            type: activeTab === "signature" ? "catalog" : activeTab,
-            isActive: true,
-            assignedUserIds: [], // Start with empty assignments
-          }
-        });
-      }
+      // Upload directly to Cloudinary to bypass Vercel serverless payload size limit
+      const secureUrl = await uploadToCloudinary(selectedFile, (pct) => {
+        setUploadProgress(pct);
+      });
+
+      await createMutation.mutateAsync({
+        data: {
+          name: newDocName,
+          filename: selectedFile.name,
+          mimeType: selectedFile.type || "application/pdf",
+          content: secureUrl, // Store Cloudinary URL directly in DB
+          type: activeTab === "signature" ? "catalog" : activeTab,
+          isActive: true,
+          assignedUserIds: [], // Start with empty assignments
+        }
+      });
       refresh();
       setIsUploadOpen(false);
       setSelectedFile(null);
       setNewDocName("");
       toast({
         title: "Document uploaded",
-        description: `"${newDocName}" has been uploaded successfully.`,
+        description: `"${newDocName}" has been successfully uploaded to Cloudinary and registered.`,
       });
     } catch (err: any) {
       toast({
@@ -716,7 +708,7 @@ export default function Documents() {
                       <div className="space-y-3">
                         <div className="relative border rounded-lg p-3 bg-slate-50 flex items-center gap-3">
                           <img 
-                            src={`data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}`} 
+                            src={customBannerDoc.content?.startsWith("http") ? customBannerDoc.content : `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content || ""}`} 
                             alt="Custom Banner" 
                             className="h-12 w-20 object-cover rounded border bg-white"
                           />
@@ -795,7 +787,7 @@ export default function Documents() {
                           __html: sigValue.replace(
                             "cid:signature_banner_image", 
                             customBannerDoc?.content 
-                              ? `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}` 
+                              ? (customBannerDoc.content.startsWith("http") ? customBannerDoc.content : `data:${customBannerDoc.mimeType};base64,${customBannerDoc.content}`)
                               : "/export_masala.png"
                           ) 
                         }} 
@@ -862,7 +854,7 @@ export default function Documents() {
             {uploading && (
               <div className="space-y-2 pt-2 pb-1">
                 <div className="flex justify-between text-xs font-semibold text-primary">
-                  <span>Uploading files in secure chunks...</span>
+                  <span>Uploading to Cloudinary...</span>
                   <span>{uploadProgress}%</span>
                 </div>
                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden border">
