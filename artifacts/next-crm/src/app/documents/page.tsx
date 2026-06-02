@@ -25,158 +25,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function resizeAndCompressImage(file: File, maxWidth = 1000, quality = 0.85): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let width = img.width;
-        let height = img.height;
-
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Canvas context not available"));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Export as JPEG with specified quality
-        const dataUrl = canvas.toDataURL("image/jpeg", quality);
-        resolve(dataUrl.split(",")[1]);
-      };
-      img.onerror = reject;
-      img.src = event.target?.result as string;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-// Chunked upload for files >9.5MB that exceed Cloudinary free plan limit.
-// Sends 2MB slices to /api/attachments/chunk (well under Vercel's 4.5MB limit),
-// then assembles them via /api/attachments/assemble and stores in DB.
-async function uploadFileInChunks(
-  file: File,
-  name: string,
-  type: string,
-  onProgress: (pct: number) => void
-): Promise<void> {
-  const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB per chunk
-  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE;
-    const end = Math.min(start + CHUNK_SIZE, file.size);
-    const chunk = file.slice(start, end);
-
-    const chunkContent = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((reader.result as string).split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(chunk);
-    });
-
-    const response = await fetch("/api/attachments/chunk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uploadId, chunkIndex: i, content: chunkContent }),
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || `Chunk ${i} upload failed`);
-    }
-    onProgress(Math.round(((i + 1) / totalChunks) * 90));
-  }
-
-  const assembleResponse = await fetch("/api/attachments/assemble", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      uploadId, name,
-      filename: file.name,
-      mimeType: file.type || "application/pdf",
-      type, isActive: true, assignedUserIds: [],
-    }),
-  });
-
-  if (!assembleResponse.ok) {
-    const err = await assembleResponse.json().catch(() => ({}));
-    throw new Error(err.error || "Assembly failed");
-  }
-  onProgress(100);
-}
-
-async function uploadToCloudinary(
-  file: File,
-  onProgress: (pct: number) => void
-): Promise<string> {
-  // Unsigned preset — safe to include directly in client code
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || "drni46zvq";
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || "dtrades_preset";
-
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("upload_preset", uploadPreset);
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`);
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const pct = Math.round((event.loaded / event.total) * 100);
-        onProgress(pct);
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const res = JSON.parse(xhr.responseText);
-          if (res.secure_url) {
-            resolve(res.secure_url);
-          } else {
-            reject(new Error("Cloudinary response is missing secure_url"));
-          }
-        } catch {
-          reject(new Error("Failed to parse Cloudinary upload response"));
-        }
-      } else {
-        try {
-          const errRes = JSON.parse(xhr.responseText);
-          reject(new Error(errRes.error?.message || `Upload failed with status ${xhr.status}`));
-        } catch {
-          reject(new Error(`Upload failed with status ${xhr.status}`));
-        }
-      }
-    };
-
-    xhr.onerror = () => reject(new Error("Network error during Cloudinary upload"));
-    xhr.send(formData);
-  });
-}
+import { useUploadThing } from "@/utils/uploadthing";
 
 export default function Documents() {
   const { user } = useAuth();
@@ -203,6 +52,16 @@ export default function Documents() {
   const createMutation = useCreateAttachment();
   const updateMutation = useUpdateAttachment();
   const deleteMutation = useDeleteAttachment();
+
+  // UploadThing hooks — direct browser-to-CDN upload, up to 64MB
+  const { startUpload: startCatalogUpload, isUploading: isCatalogUploading } = useUploadThing("catalogUploader", {
+    onUploadProgress: (pct) => setUploadProgress(pct),
+    onUploadError: (err) => { toast({ title: "Upload failed", description: err.message, variant: "destructive" }); },
+  });
+  const { startUpload: startBannerUpload, isUploading: isBannerUploading } = useUploadThing("bannerUploader", {
+    onUploadProgress: (pct) => setUploadProgress(pct),
+    onUploadError: (err) => { toast({ title: "Banner upload failed", description: err.message, variant: "destructive" }); },
+  });
 
   // Signature editor state
   const [sigValue, setSigValue] = useState("");
@@ -249,9 +108,10 @@ export default function Documents() {
     setIsSavingBanner(true);
     setUploadProgress(0);
     try {
-      const secureUrl = await uploadToCloudinary(file, (pct) => {
-        setUploadProgress(pct);
-      });
+      // Upload to UploadThing CDN — handles images up to 16MB
+      const uploaded = await startBannerUpload([file]);
+      if (!uploaded || uploaded.length === 0) throw new Error("Upload returned no files");
+      const secureUrl = uploaded[0].ufsUrl;
 
       if (customBannerDoc) {
         await updateMutation.mutateAsync({
@@ -277,7 +137,7 @@ export default function Documents() {
       refresh();
       toast({
         title: "Banner updated",
-        description: "The custom signature banner has been uploaded to Cloudinary successfully.",
+        description: "The custom signature banner has been uploaded successfully.",
       });
     } catch (err: any) {
       toast({
@@ -433,30 +293,22 @@ export default function Documents() {
     const docType = activeTab === "signature" ? "catalog" : activeTab;
 
     try {
-      const CLOUDINARY_MAX = 9.5 * 1024 * 1024; // 9.5MB — Cloudinary free plan is 10MB
+      // Upload directly to UploadThing CDN — handles up to 64MB, bypasses Vercel entirely
+      const uploaded = await startCatalogUpload([selectedFile]);
+      if (!uploaded || uploaded.length === 0) throw new Error("Upload returned no files");
+      const fileUrl = uploaded[0].ufsUrl;
 
-      if (selectedFile.size > CLOUDINARY_MAX) {
-        // Large file: upload in 2MB chunks to the DB via Next.js API
-        await uploadFileInChunks(selectedFile, newDocName, docType, (pct) => {
-          setUploadProgress(pct);
-        });
-      } else {
-        // Small file: upload directly to Cloudinary (bypasses Vercel entirely)
-        const secureUrl = await uploadToCloudinary(selectedFile, (pct) => {
-          setUploadProgress(pct);
-        });
-        await createMutation.mutateAsync({
-          data: {
-            name: newDocName,
-            filename: selectedFile.name,
-            mimeType: selectedFile.type || "application/pdf",
-            content: secureUrl,
-            type: docType,
-            isActive: true,
-            assignedUserIds: [],
-          }
-        });
-      }
+      await createMutation.mutateAsync({
+        data: {
+          name: newDocName,
+          filename: selectedFile.name,
+          mimeType: selectedFile.type || "application/pdf",
+          content: fileUrl,
+          type: docType,
+          isActive: true,
+          assignedUserIds: [],
+        }
+      });
 
       refresh();
       setIsUploadOpen(false);
