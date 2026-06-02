@@ -7,7 +7,7 @@ const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
 const reactQueryPath = path.dirname(require.resolve("@tanstack/react-query/package.json"));
-const turbopackPath = process.platform === "win32" ? "./node_modules/@tanstack/react-query" : reactQueryPath;
+const turbopackPath = "./node_modules/@tanstack/react-query";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
