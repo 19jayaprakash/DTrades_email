@@ -11,6 +11,7 @@ const turbopackPath = process.platform === "win32" ? "./node_modules/@tanstack/r
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ["@workspace/api-client-react"],
   turbopack: {
     resolveAlias: {
       "@tanstack/react-query": turbopackPath,
