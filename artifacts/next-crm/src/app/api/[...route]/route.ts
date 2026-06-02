@@ -735,12 +735,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
       };
     });
 
-    const inserted = await db.insert(emailLogsTable).values(logInserts).returning({ id: emailLogsTable.id });
+    let insertedCount = 0;
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < logInserts.length; i += BATCH_SIZE) {
+      const batch = logInserts.slice(i, i + BATCH_SIZE);
+      const inserted = await db.insert(emailLogsTable).values(batch).returning({ id: emailLogsTable.id });
+      insertedCount += inserted.length;
+    }
 
     return NextResponse.json({
-      queued: inserted.length,
+      queued: insertedCount,
       recipients: valid.length,
-      message: `${inserted.length} emails successfully queued in your serverless database queue!`,
+      message: `${insertedCount} emails successfully queued in your serverless database queue!`,
     });
   }
 

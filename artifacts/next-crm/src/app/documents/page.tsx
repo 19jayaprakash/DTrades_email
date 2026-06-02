@@ -113,7 +113,7 @@ export default function Documents() {
       // Upload to UploadThing CDN — handles images up to 16MB
       const uploaded = await startBannerUpload([file]);
       if (!uploaded || uploaded.length === 0) throw new Error("Upload returned no files");
-      const secureUrl = uploaded[0].ufsUrl;
+      const secureUrl = uploaded[0].url;
 
       if (customBannerDoc) {
         await updateMutation.mutateAsync({
@@ -298,7 +298,7 @@ export default function Documents() {
       // Upload directly to UploadThing CDN — handles up to 64MB, bypasses Vercel entirely
       const uploaded = await startCatalogUpload([selectedFile]);
       if (!uploaded || uploaded.length === 0) throw new Error("Upload returned no files");
-      const fileUrl = uploaded[0].ufsUrl;
+      const fileUrl = uploaded[0].url;
 
       await createMutation.mutateAsync({
         data: {
