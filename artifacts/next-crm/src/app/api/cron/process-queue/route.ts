@@ -178,6 +178,7 @@ export async function GET(req: Request) {
       const [sigRow] = await db
         .select({ content: attachmentContentsTable.content })
         .from(attachmentsTable)
+        .innerJoin(attachmentContentsTable, eq(attachmentContentsTable.attachmentId, attachmentsTable.id))
         .where(and(eq(attachmentsTable.type, "signature"), eq(attachmentsTable.isActive, true)))
         .limit(1);
       if (sigRow) {
@@ -197,6 +198,7 @@ export async function GET(req: Request) {
           mimeType: attachmentsTable.mimeType,
         })
         .from(attachmentsTable)
+        .innerJoin(attachmentContentsTable, eq(attachmentContentsTable.attachmentId, attachmentsTable.id))
         .where(and(eq(attachmentsTable.type, "signature_banner"), eq(attachmentsTable.isActive, true)))
         .limit(1);
       if (bannerRow) {

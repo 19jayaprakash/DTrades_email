@@ -101,7 +101,7 @@ async function sendEmailWithRetry(
   logId: number,
   attachments: NmAttachment[],
   globalSignatureHtml: string | null,
-  customBannerRow: { filename: string; content: string; mimeType: string } | null
+  customBannerRow: { filename: string; content: Buffer; mimeType: string } | null
 ) {
   const transporter = getTransporter(accountRow);
 
@@ -141,7 +141,7 @@ async function sendEmailWithRetry(
     if (customBannerRow) {
       mailAttachments.push({
         filename: customBannerRow.filename,
-        content: Buffer.from(customBannerRow.content, "base64"),
+        content: customBannerRow.content,
         contentType: customBannerRow.mimeType,
         cid: signatureBannerCid
       } as any);
@@ -230,14 +230,29 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
       )
     );
 
-  const result: NmAttachment[] = termsRows.map(r => {
+  const result: NmAttachment[] = [];
+  for (const r of termsRows) {
     const decompressed = decompressContent(r.content) || "";
-    return {
-      filename: r.filename,
-      content: Buffer.from(decompressed, "base64"),
-      contentType: r.mimeType,
-    };
-  });
+    if (decompressed.startsWith("http://") || decompressed.startsWith("https://")) {
+      try {
+        const res = await fetch(decompressed);
+        const arrBuf = await res.arrayBuffer();
+        result.push({
+          filename: r.filename,
+          content: Buffer.from(arrBuf),
+          contentType: r.mimeType,
+        });
+      } catch (e) {
+        logger.error({ err: e, url: decompressed }, "Error fetching terms attachment from URL");
+      }
+    } else {
+      result.push({
+        filename: r.filename,
+        content: Buffer.from(decompressed, "base64"),
+        contentType: r.mimeType,
+      });
+    }
+  }
 
   // Fetch the selected catalog separately (if any)
   if (selectedCatalogId !== undefined && selectedCatalogId !== null) {
@@ -261,11 +276,25 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
 
     for (const r of catalogRows) {
       const decompressed = decompressContent(r.content) || "";
-      result.push({
-        filename: r.filename,
-        content: Buffer.from(decompressed, "base64"),
-        contentType: r.mimeType,
-      });
+      if (decompressed.startsWith("http://") || decompressed.startsWith("https://")) {
+        try {
+          const res = await fetch(decompressed);
+          const arrBuf = await res.arrayBuffer();
+          result.push({
+            filename: r.filename,
+            content: Buffer.from(arrBuf),
+            contentType: r.mimeType,
+          });
+        } catch (e) {
+          logger.error({ err: e, url: decompressed }, "Error fetching catalog attachment from URL");
+        }
+      } else {
+        result.push({
+          filename: r.filename,
+          content: Buffer.from(decompressed, "base64"),
+          contentType: r.mimeType,
+        });
+      }
     }
   }
 
@@ -335,7 +364,7 @@ router.post("/emails/send", requireAuth, async (req, res) => {
     logger.error({ err: e }, "Error fetching global signature");
   }
 
-  let customBannerRow = null;
+  let customBannerRow: { filename: string; content: Buffer; mimeType: string } | null = null;
   try {
     const [bannerRow] = await db
       .select({
@@ -348,9 +377,18 @@ router.post("/emails/send", requireAuth, async (req, res) => {
       .where(and(eq(attachmentsTable.type, "signature_banner"), eq(attachmentsTable.isActive, true)))
       .limit(1);
     if (bannerRow) {
+      let contentBuffer: Buffer;
+      const contentStr = decompressContent(bannerRow.content) || "";
+      if (contentStr.startsWith("http://") || contentStr.startsWith("https://")) {
+        const res = await fetch(contentStr);
+        const arrBuf = await res.arrayBuffer();
+        contentBuffer = Buffer.from(arrBuf);
+      } else {
+        contentBuffer = Buffer.from(contentStr, "base64");
+      }
       customBannerRow = {
         filename: bannerRow.filename,
-        content: decompressContent(bannerRow.content) || "",
+        content: contentBuffer,
         mimeType: bannerRow.mimeType,
       };
     }
@@ -463,7 +501,11 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
   const template = logRow.templateId
     ? await db.select().from(templatesTable).where(eq(templatesTable.id, logRow.templateId)).limit(1).then(r => r[0])
     : null;
-  const html = template?.htmlContent || "<p>Retry email</p>";
+  let html = template?.htmlContent || "<p>Retry email</p>";
+  
+  if (logRow.recipientName) {
+    html = html.replace(/\{\{\s*name\s*\}\}/g, logRow.recipientName);
+  }
 
   let globalSignatureHtml = null;
   try {
@@ -481,7 +523,7 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
     logger.error({ err: e }, "Error fetching global signature");
   }
 
-  let customBannerRow = null;
+  let customBannerRow: { filename: string; content: Buffer; mimeType: string } | null = null;
   try {
     const [bannerRow] = await db
       .select({
@@ -494,9 +536,18 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
       .where(and(eq(attachmentsTable.type, "signature_banner"), eq(attachmentsTable.isActive, true)))
       .limit(1);
     if (bannerRow) {
+      let contentBuffer: Buffer;
+      const contentStr = decompressContent(bannerRow.content) || "";
+      if (contentStr.startsWith("http://") || contentStr.startsWith("https://")) {
+        const res = await fetch(contentStr);
+        const arrBuf = await res.arrayBuffer();
+        contentBuffer = Buffer.from(arrBuf);
+      } else {
+        contentBuffer = Buffer.from(contentStr, "base64");
+      }
       customBannerRow = {
         filename: bannerRow.filename,
-        content: decompressContent(bannerRow.content) || "",
+        content: contentBuffer,
         mimeType: bannerRow.mimeType,
       };
     }
