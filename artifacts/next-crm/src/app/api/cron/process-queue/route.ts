@@ -370,13 +370,21 @@ export async function GET(req: Request) {
       } as any);
     } else {
       const transporter = getTransporter(account);
+      const messageId = `<${Date.now()}-${Math.random().toString(36).substring(2, 10)}@${account.email.split('@')[1] || 'dtrades.com'}>`;
       await transporter.sendMail({
         from: `"${account.name}" <${account.email}>`,
+        replyTo: account.email,
         to: toAddress,
         subject: pendingEmail.subject,
         html: htmlWithSignature,
         text: textFallback,
         attachments: mailAttachments,
+        messageId: messageId,
+        headers: {
+          "List-Unsubscribe": `<mailto:${account.email}?subject=unsubscribe>`,
+          "Precedence": "bulk",
+          "X-Entity-Ref-ID": messageId
+        }
       });
     }
 

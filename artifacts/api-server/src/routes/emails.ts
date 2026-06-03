@@ -203,13 +203,21 @@ async function sendEmailWithRetry(
     } else {
       // ── SMTP fallback ──────────────────────────────────────────────────────
       const transporter = getTransporter(accountRow);
+      const messageId = `<${Date.now()}-${Math.random().toString(36).substring(2, 10)}@${accountRow.email.split('@')[1] || 'dtrades.com'}>`;
       await transporter.sendMail({
         from: `"${accountRow.name}" <${accountRow.email}>`,
+        replyTo: accountRow.email,
         to: toAddress,
         subject,
         html: htmlWithSignature,
         text: textFallback,
         attachments: mailAttachments,
+        messageId: messageId,
+        headers: {
+          "List-Unsubscribe": `<mailto:${accountRow.email}?subject=unsubscribe>`,
+          "Precedence": "bulk",
+          "X-Entity-Ref-ID": messageId
+        }
       });
     }
     await db.update(emailLogsTable).set({ status: "sent", sentAt: new Date() }).where(eq(emailLogsTable.id, logId));
