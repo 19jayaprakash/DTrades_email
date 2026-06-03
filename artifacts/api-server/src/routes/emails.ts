@@ -172,7 +172,7 @@ async function sendEmailWithRetry(
       errorDetails: JSON.stringify({
         estimatedSize,
         attachmentCount: mailAttachments.length,
-        attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, originalSize: (a as any).originalSize }))
+        attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
       }, null, 2)
     }).where(eq(emailLogsTable.id, logId));
     logger.warn({ logId, email: to.email, estimatedSize }, "Skipped: email too large");
@@ -227,7 +227,7 @@ async function sendEmailWithRetry(
         stack: error.stack,
         method: isGmailApiAvailable() ? "gmail-api" : "smtp",
         attachmentCount: mailAttachments.length,
-        attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType }))
+        attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
       }, null, 2)
     }).where(eq(emailLogsTable.id, logId));
     logger.error({ logId, email: to.email, errorType, message }, "Email failed");

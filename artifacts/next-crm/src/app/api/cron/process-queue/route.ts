@@ -336,7 +336,7 @@ export async function GET(req: Request) {
           errorDetails: JSON.stringify({
             estimatedSize,
             attachmentCount: mailAttachments.length,
-            attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, originalSize: (a as any).originalSize }))
+            attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
           }, null, 2)
         })
         .where(eq(emailLogsTable.id, pendingEmail.id));
@@ -408,14 +408,14 @@ export async function GET(req: Request) {
             errorType, 
             errorMessage: message,
             errorDetails: JSON.stringify({
-              rawError: error.message,
-              stack: error.stack,
-              method: isGmailApiAvailable() ? "gmail-api" : "smtp",
-              attachmentCount: typeof mailAttachments !== 'undefined' ? mailAttachments.length : 0,
-              attachments: typeof mailAttachments !== 'undefined' ? mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType })) : []
-            }, null, 2)
-          })
-          .where(eq(emailLogsTable.id, targetId));
+            rawError: error.message,
+            stack: error.stack,
+            method: isGmailApiAvailable() ? "gmail-api" : "smtp",
+            attachmentCount: mailAttachments.length,
+            attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
+          }, null, 2)
+        })
+        .where(eq(emailLogsTable.id, targetId));
       }
     } catch (e: any) {
       console.error("Failed to write error to db:", e.message);
