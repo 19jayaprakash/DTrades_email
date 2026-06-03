@@ -184,7 +184,7 @@ async function sendEmailWithRetry(
   const textFallback = htmlWithSignature.replace(/<br\s*[\/]?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
 
   try {
-    if (isGmailApiAvailable()) {
+    if (false && isGmailApiAvailable()) {
       // ── Gmail API path (fast, no SMTP connection overhead) ────────────────
       await sendViaGmailApi({
         fromEmail: accountRow.email,

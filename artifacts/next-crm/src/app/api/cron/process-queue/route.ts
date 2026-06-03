@@ -353,7 +353,7 @@ export async function GET(req: Request) {
     const textFallback = htmlWithSignature.replace(/<br\s*[\/]?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
 
     // 7. Dispatch via Gmail API or SMTP Fallback
-    if (isGmailApiAvailable()) {
+    if (false && isGmailApiAvailable()) {
       await sendViaGmailApi({
         fromEmail: account.email,
         fromName: account.name,
