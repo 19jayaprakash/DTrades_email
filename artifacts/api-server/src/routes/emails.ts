@@ -209,9 +209,7 @@ async function sendEmailWithRetry(
         html: htmlWithSignature,
         text: textFallback,
         attachments: mailAttachments,
-        headers: {
-          "List-Unsubscribe": `<mailto:${accountRow.email}?subject=unsubscribe>`
-        }
+        xMailer: false
       });
     }
     await db.update(emailLogsTable).set({ status: "sent", sentAt: new Date() }).where(eq(emailLogsTable.id, logId));

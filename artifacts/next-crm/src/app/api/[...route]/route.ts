@@ -701,7 +701,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
   if (route[0] === "emails" && route[1] === "send") {
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { accountId, templateId, recipients, subject, htmlContent, delaySeconds } = body;
+    const { accountId, templateId, recipients, subject, htmlContent, delaySeconds, selectedCatalogIds } = body;
     if (!accountId || !templateId || !recipients || !subject) {
       return NextResponse.json({ error: "accountId, templateId, recipients, subject required" }, { status: 400 });
     }
@@ -721,6 +721,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
     const delay = delaySeconds || 0;
     const now = new Date();
 
+    const catalogIdsArray = Array.isArray(selectedCatalogIds)
+      ? selectedCatalogIds
+      : (body.selectedCatalogId ? [body.selectedCatalogId] : null);
+
     // Map each email into the database queue with specific future scheduledAt timestamps!
     const logInserts = valid.map((r, index) => {
       const scheduledTime = new Date(now.getTime() + index * delay * 1000);
@@ -732,6 +736,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
         subject,
         status: "pending" as const,
         scheduledAt: scheduledTime,
+        selectedCatalogIds: catalogIdsArray,
       };
     });
 

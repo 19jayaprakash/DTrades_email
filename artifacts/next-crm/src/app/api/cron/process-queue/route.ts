@@ -374,9 +374,7 @@ export async function GET(req: Request) {
         html: htmlWithSignature,
         text: textFallback,
         attachments: mailAttachments,
-        headers: {
-          "List-Unsubscribe": `<mailto:${account.email}?subject=unsubscribe>`
-        }
+        xMailer: false
       });
     }
 
