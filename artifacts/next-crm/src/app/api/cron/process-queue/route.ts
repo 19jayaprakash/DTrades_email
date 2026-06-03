@@ -12,7 +12,7 @@ import fs from "node:fs";
 // Maximum email size: 24.5 MB safely under Gmail's 25MB limit
 const MAX_EMAIL_SIZE_BYTES = 24.5 * 1024 * 1024;
 
-type NmAttachment = { filename: string; content: Buffer; contentType: string };
+type NmAttachment = { filename: string; content: Buffer; contentType: string; originalSize?: number };
 
 const transporterCache = new Map<number, nodemailer.Transporter>();
 
@@ -36,7 +36,7 @@ function getTransporter(accountRow: typeof accountsTable.$inferSelect): nodemail
 
 function estimateMailSize(html: string, attachments: NmAttachment[]): number {
   const htmlSize = Buffer.byteLength(html, "utf-8");
-  const attachSize = attachments.reduce((sum, a) => sum + a.content.length, 0);
+  const attachSize = attachments.reduce((sum, a) => sum + (a.originalSize ?? a.content.length), 0);
   return Math.round((htmlSize + attachSize) * 1.37); // base64 overhead
 }
 
@@ -57,17 +57,26 @@ function classifyError(err: Error): { errorType: "smtp_failed" | "invalid_email"
   return { errorType: "smtp_failed", message: err.message };
 }
 
-async function getAttachmentBuffer(contentStr: string | null): Promise<Buffer> {
+async function getAttachmentBuffer(contentStr: string | null): Promise<{ buffer: Buffer; originalSize?: number }> {
   const decompressed = decompressContent(contentStr) || "";
   if (decompressed.startsWith("http://") || decompressed.startsWith("https://")) {
     const res = await fetch(decompressed);
     if (!res.ok) {
       throw new Error(`Failed to download attachment from URL: ${decompressed}`);
     }
+    const lenStr = res.headers.get("content-length");
+    const size = lenStr ? parseInt(lenStr, 10) : 0;
+    if (size > MAX_EMAIL_SIZE_BYTES) {
+      return { buffer: Buffer.alloc(0), originalSize: size };
+    }
     const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    return { buffer: Buffer.from(arrayBuffer) };
   }
-  return Buffer.from(decompressed, "base64");
+  const approxSize = Math.round(decompressed.length * 0.75);
+  if (approxSize > MAX_EMAIL_SIZE_BYTES) {
+    return { buffer: Buffer.alloc(0), originalSize: approxSize };
+  }
+  return { buffer: Buffer.from(decompressed, "base64") };
 }
 
 async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
@@ -89,11 +98,12 @@ async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
     );
 
   const attachmentPromises = rows.map(async r => {
-    const buffer = await getAttachmentBuffer(r.content);
+    const { buffer, originalSize } = await getAttachmentBuffer(r.content);
     return {
       filename: r.filename,
       content: buffer,
       contentType: r.mimeType,
+      originalSize,
     };
   });
 

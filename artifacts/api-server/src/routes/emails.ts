@@ -63,7 +63,7 @@ async function pMap<T>(items: T[], fn: (item: T, index: number) => Promise<void>
   await Promise.all(workers);
 }
 
-type NmAttachment = { filename: string; content: Buffer; contentType: string };
+type NmAttachment = { filename: string; content: Buffer; contentType: string; originalSize?: number };
 
 const transporterCache = new Map<number, nodemailer.Transporter>();
 
@@ -88,7 +88,7 @@ function getTransporter(accountRow: typeof accountsTable.$inferSelect): nodemail
 /** Estimate total mail size in bytes (HTML + all attachments) */
 function estimateMailSize(html: string, attachments: NmAttachment[]): number {
   const htmlSize = Buffer.byteLength(html, "utf-8");
-  const attachSize = attachments.reduce((sum, a) => sum + a.content.length, 0);
+  const attachSize = attachments.reduce((sum, a) => sum + (a.originalSize ?? a.content.length), 0);
   // MIME encoding overhead ~37%
   return Math.round((htmlSize + attachSize) * 1.37);
 }
@@ -239,6 +239,12 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
     if (decompressed.startsWith("http://") || decompressed.startsWith("https://")) {
       try {
         const res = await fetch(decompressed);
+        const lenStr = res.headers.get("content-length");
+        const size = lenStr ? parseInt(lenStr, 10) : 0;
+        if (size > MAX_EMAIL_SIZE_BYTES) {
+          result.push({ filename: r.filename, content: Buffer.alloc(0), contentType: r.mimeType, originalSize: size });
+          continue;
+        }
         const arrBuf = await res.arrayBuffer();
         result.push({
           filename: r.filename,
@@ -249,6 +255,11 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
         logger.error({ err: e, url: decompressed }, "Error fetching terms attachment from URL");
       }
     } else {
+      const approxSize = Math.round(decompressed.length * 0.75);
+      if (approxSize > MAX_EMAIL_SIZE_BYTES) {
+        result.push({ filename: r.filename, content: Buffer.alloc(0), contentType: r.mimeType, originalSize: approxSize });
+        continue;
+      }
       result.push({
         filename: r.filename,
         content: Buffer.from(decompressed, "base64"),
@@ -282,6 +293,12 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
       if (decompressed.startsWith("http://") || decompressed.startsWith("https://")) {
         try {
           const res = await fetch(decompressed);
+          const lenStr = res.headers.get("content-length");
+          const size = lenStr ? parseInt(lenStr, 10) : 0;
+          if (size > MAX_EMAIL_SIZE_BYTES) {
+            result.push({ filename: r.filename, content: Buffer.alloc(0), contentType: r.mimeType, originalSize: size });
+            continue;
+          }
           const arrBuf = await res.arrayBuffer();
           result.push({
             filename: r.filename,
@@ -292,6 +309,11 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
           logger.error({ err: e, url: decompressed }, "Error fetching catalog attachment from URL");
         }
       } else {
+        const approxSize = Math.round(decompressed.length * 0.75);
+        if (approxSize > MAX_EMAIL_SIZE_BYTES) {
+          result.push({ filename: r.filename, content: Buffer.alloc(0), contentType: r.mimeType, originalSize: approxSize });
+          continue;
+        }
         result.push({
           filename: r.filename,
           content: Buffer.from(decompressed, "base64"),
@@ -340,7 +362,6 @@ router.post("/emails/send", requireAuth, async (req, res) => {
     recipientName: r.name || null,
     subject,
     status: "pending" as const,
-    scheduledAt: new Date(Date.now() + 5 * 60 * 1000), // delay cron pickup by 5 mins to prevent race condition
   }));
 
   const inserted = await db.insert(emailLogsTable).values(logInserts).returning({ id: emailLogsTable.id });
@@ -500,8 +521,7 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
   await db.update(emailLogsTable).set({ 
     status: "pending", 
     errorMessage: null, 
-    errorType: null,
-    scheduledAt: new Date(Date.now() + 5 * 60 * 1000) 
+    errorType: null 
   }).where(eq(emailLogsTable.id, id));
 
   res.json({ success: true, message: "Retry queued" });
