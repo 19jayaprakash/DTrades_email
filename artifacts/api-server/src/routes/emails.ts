@@ -83,6 +83,49 @@ function getTransporter(accountRow: typeof accountsTable.$inferSelect): nodemail
   return transporter;
 }
 
+function buildCleanHtml(html: string, subject: string): string {
+  if (html.toLowerCase().includes("<html") && html.toLowerCase().includes("<body")) {
+    return html;
+  }
+  let styles = "";
+  const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let match;
+  let cleanHtml = html;
+  while ((match = styleRegex.exec(html)) !== null) {
+    styles += match[1] + "\n";
+  }
+  cleanHtml = cleanHtml.replace(styleRegex, "");
+  cleanHtml = cleanHtml.replace(/<meta[^>]*>/gi, "");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${subject}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.7; margin: 0; padding: 0; }
+    ${styles}
+  </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+  ${cleanHtml}
+</body>
+</html>`;
+}
+
+function cleanTextFallback(html: string): string {
+  let text = html.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, "");
+  text = text.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "");
+  text = text.replace(/<br\s*\/?>/gi, "\n");
+  text = text.replace(/<\/p>/gi, "\n\n");
+  text = text.replace(/<\/div>/gi, "\n");
+  text = text.replace(/<\/li>/gi, "\n");
+  text = text.replace(/<[^>]+>/g, "");
+  text = text.replace(/\n\s*\n+/g, "\n\n");
+  return text.trim();
+}
+
 /** Estimate total mail size in bytes (HTML + all attachments) */
 function estimateMailSize(html: string, attachments: NmAttachment[]): number {
   const htmlSize = Buffer.byteLength(html, "utf-8");
@@ -178,8 +221,9 @@ async function sendEmailWithRetry(
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
-  const textFallback = htmlWithSignature.replace(/<br\s*[\/]?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
+  const toAddress = to.name ? `"${to.name.replace(/"/g, '\\"')}" <${to.email}>` : to.email;
+  const cleanHtml = buildCleanHtml(htmlWithSignature, subject);
+  const textFallback = cleanTextFallback(htmlWithSignature);
 
   try {
     if (false && isGmailApiAvailable()) {
@@ -189,7 +233,7 @@ async function sendEmailWithRetry(
         fromName: accountRow.name,
         to: toAddress,
         subject,
-        html: htmlWithSignature,
+        html: cleanHtml,
         text: textFallback,
         attachments: mailAttachments.map(a => ({
           filename: (a as any).filename,
@@ -202,11 +246,11 @@ async function sendEmailWithRetry(
       // ── SMTP fallback ──────────────────────────────────────────────────────
       const transporter = getTransporter(accountRow);
       await transporter.sendMail({
-        from: `"${accountRow.name}" <${accountRow.email}>`,
+        from: `"${accountRow.name.replace(/"/g, '\\"')}" <${accountRow.email}>`,
         replyTo: accountRow.email,
         to: toAddress,
         subject,
-        html: htmlWithSignature,
+        html: cleanHtml,
         text: textFallback,
         attachments: mailAttachments,
         xMailer: false
