@@ -306,10 +306,8 @@ async function getUserAttachments(userId: number, selectedCatalogIds?: number[])
       })
       .from(attachmentsTable)
       .innerJoin(attachmentContentsTable, eq(attachmentContentsTable.attachmentId, attachmentsTable.id))
-      .innerJoin(userAttachmentsTable, eq(userAttachmentsTable.attachmentId, attachmentsTable.id))
       .where(
         and(
-          eq(userAttachmentsTable.userId, userId),
           eq(attachmentsTable.isActive, true),
           inArray(attachmentsTable.id, selectedCatalogIds)
         )
