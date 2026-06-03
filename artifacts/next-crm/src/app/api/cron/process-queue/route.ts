@@ -319,11 +319,12 @@ export async function GET(req: Request) {
 
     mailAttachments = [...attachments];
     if (customBannerRow) {
-      const bannerBuffer = await getAttachmentBuffer(customBannerRow.content);
+      const bannerResult = await getAttachmentBuffer(customBannerRow.content);
       mailAttachments.push({
         filename: customBannerRow.filename,
-        content: bannerBuffer,
+        content: bannerResult.buffer,
         contentType: customBannerRow.mimeType,
+        originalSize: bannerResult.originalSize,
         cid: signatureBannerCid
       } as any);
     }

@@ -7,6 +7,7 @@ import {
   getListAttachmentsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -281,32 +282,27 @@ export default function Compose() {
                             name="selectedCatalogIds"
                             render={({ field }) => (
                               <FormItem className="space-y-2.5">
-                                {(userAttachments || [])
-                                  .filter(att => (att as any).type === "catalog")
-                                  .map(c => (
-                                    <div key={c.id} className="flex items-center space-x-2.5">
-                                      <FormControl>
-                                        <Checkbox
-                                          id={`catalog-${c.id}`}
-                                          checked={field.value?.includes(c.id)}
-                                          onCheckedChange={(checked) => {
-                                            const current = field.value || [];
-                                            if (checked) {
-                                              field.onChange([...current, c.id]);
-                                            } else {
-                                              field.onChange(current.filter(id => id !== c.id));
-                                            }
-                                          }}
-                                        />
-                                      </FormControl>
-                                      <label
-                                        htmlFor={`catalog-${c.id}`}
-                                        className="text-xs font-medium leading-none cursor-pointer text-slate-700"
-                                      >
-                                        📖 {c.name}
-                                      </label>
-                                    </div>
-                                  ))}
+                                <FormControl>
+                                  <RadioGroup
+                                    onValueChange={(val) => field.onChange([parseInt(val, 10)])}
+                                    value={field.value?.[0]?.toString() || ""}
+                                    className="space-y-2.5"
+                                  >
+                                    {(userAttachments || [])
+                                      .filter(att => (att as any).type === "catalog")
+                                      .map(c => (
+                                        <div key={c.id} className="flex items-center space-x-2.5">
+                                          <RadioGroupItem value={c.id.toString()} id={`catalog-${c.id}`} />
+                                          <label
+                                            htmlFor={`catalog-${c.id}`}
+                                            className="text-xs font-medium leading-none cursor-pointer text-slate-700"
+                                          >
+                                            📖 {c.name}
+                                          </label>
+                                        </div>
+                                      ))}
+                                  </RadioGroup>
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
