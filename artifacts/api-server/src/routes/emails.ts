@@ -172,6 +172,7 @@ async function sendEmailWithRetry(
   // ─────────────────────────────────────────────────────────────────────────
 
   const toAddress = to.name ? `"${to.name}" <${to.email}>` : to.email;
+  const textFallback = htmlWithSignature.replace(/<br\s*[\/]?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
 
   try {
     if (isGmailApiAvailable()) {
@@ -182,13 +183,14 @@ async function sendEmailWithRetry(
         to: toAddress,
         subject,
         html: htmlWithSignature,
+        text: textFallback,
         attachments: mailAttachments.map(a => ({
           filename: (a as any).filename,
           content: (a as any).content,
           contentType: (a as any).contentType || (a as any).mimeType,
           cid: (a as any).cid,
         })),
-      });
+      } as any);
     } else {
       // ── SMTP fallback ──────────────────────────────────────────────────────
       const transporter = getTransporter(accountRow);
@@ -197,6 +199,7 @@ async function sendEmailWithRetry(
         to: toAddress,
         subject,
         html: htmlWithSignature,
+        text: textFallback,
         attachments: mailAttachments,
       });
     }
@@ -337,6 +340,7 @@ router.post("/emails/send", requireAuth, async (req, res) => {
     recipientName: r.name || null,
     subject,
     status: "pending" as const,
+    scheduledAt: new Date(Date.now() + 5 * 60 * 1000), // delay cron pickup by 5 mins to prevent race condition
   }));
 
   const inserted = await db.insert(emailLogsTable).values(logInserts).returning({ id: emailLogsTable.id });
@@ -493,7 +497,12 @@ router.post("/emails/history/:id/retry", requireAuth, async (req, res) => {
     return;
   }
 
-  await db.update(emailLogsTable).set({ status: "pending", errorMessage: null, errorType: null }).where(eq(emailLogsTable.id, id));
+  await db.update(emailLogsTable).set({ 
+    status: "pending", 
+    errorMessage: null, 
+    errorType: null,
+    scheduledAt: new Date(Date.now() + 5 * 60 * 1000) 
+  }).where(eq(emailLogsTable.id, id));
 
   res.json({ success: true, message: "Retry queued" });
 

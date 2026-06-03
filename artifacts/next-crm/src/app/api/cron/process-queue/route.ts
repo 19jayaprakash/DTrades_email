@@ -288,6 +288,7 @@ export async function GET(req: Request) {
     }
 
     const toAddress = pendingEmail.recipientName ? `"${pendingEmail.recipientName}" <${pendingEmail.recipientEmail}>` : pendingEmail.recipientEmail;
+    const textFallback = htmlWithSignature.replace(/<br\s*[\/]?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
 
     // 7. Dispatch via Gmail API or SMTP Fallback
     if (isGmailApiAvailable()) {
@@ -297,13 +298,14 @@ export async function GET(req: Request) {
         to: toAddress,
         subject: pendingEmail.subject,
         html: htmlWithSignature,
+        text: textFallback,
         attachments: mailAttachments.map(a => ({
           filename: (a as any).filename,
           content: (a as any).content,
           contentType: (a as any).contentType || (a as any).mimeType,
           cid: (a as any).cid,
         })),
-      });
+      } as any);
     } else {
       const transporter = getTransporter(account);
       await transporter.sendMail({
@@ -311,6 +313,7 @@ export async function GET(req: Request) {
         to: toAddress,
         subject: pendingEmail.subject,
         html: htmlWithSignature,
+        text: textFallback,
         attachments: mailAttachments,
       });
     }

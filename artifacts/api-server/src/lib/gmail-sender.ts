@@ -83,6 +83,7 @@ async function buildRawMime(opts: {
   to: string;
   subject: string;
   html: string;
+  text?: string;
   attachments: GmailAttachment[];
 }): Promise<Buffer> {
   const transport = nodemailer.createTransport({ streamTransport: true, newline: "unix", buffer: true });
@@ -94,6 +95,7 @@ async function buildRawMime(opts: {
         to: opts.to,
         subject: opts.subject,
         html: opts.html,
+        text: opts.text,
         attachments: opts.attachments.map(a => ({
           filename: a.filename,
           content: a.content,
