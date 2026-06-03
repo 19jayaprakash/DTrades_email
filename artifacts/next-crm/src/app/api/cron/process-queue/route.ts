@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 import { db, usersTable, emailLogsTable, accountsTable, templatesTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable } from "@workspace/db";
-import { eq, and, lte, sql } from "drizzle-orm";
+import { eq, and, lte, sql, inArray } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { sendViaGmailApi, isGmailApiAvailable } from "@/lib/gmail-sender";
 import { decompressContent } from "@/lib/compression";
