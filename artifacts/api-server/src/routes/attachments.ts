@@ -23,6 +23,7 @@ router.get("/attachments", requireAuth, async (req, res) => {
         mimeType: attachmentsTable.mimeType,
         isActive: attachmentsTable.isActive,
         content: sql<string | null>`CASE WHEN ${attachmentsTable.type} IN ('signature', 'signature_banner') THEN ${attachmentContentsTable.content} ELSE NULL END`,
+        sizeBytes: sql<number | null>`LENGTH(${attachmentContentsTable.content})`,
         createdAt: attachmentsTable.createdAt,
       })
       .from(attachmentsTable)
@@ -47,6 +48,7 @@ router.get("/attachments", requireAuth, async (req, res) => {
         mimeType: attachmentsTable.mimeType,
         isActive: attachmentsTable.isActive,
         content: sql<string | null>`CASE WHEN ${attachmentsTable.type} IN ('signature', 'signature_banner') THEN ${attachmentContentsTable.content} ELSE NULL END`,
+        sizeBytes: sql<number | null>`LENGTH(${attachmentContentsTable.content})`,
         createdAt: attachmentsTable.createdAt,
       })
       .from(attachmentsTable)
@@ -69,6 +71,7 @@ router.get("/attachments", requireAuth, async (req, res) => {
       mimeType: attachmentsTable.mimeType,
       isActive: attachmentsTable.isActive,
       content: sql<string | null>`CASE WHEN ${attachmentsTable.type} IN ('signature', 'signature_banner') THEN ${attachmentContentsTable.content} ELSE NULL END`,
+      sizeBytes: sql<number | null>`LENGTH(${attachmentContentsTable.content})`,
       createdAt: attachmentsTable.createdAt,
     })
     .from(attachmentsTable)

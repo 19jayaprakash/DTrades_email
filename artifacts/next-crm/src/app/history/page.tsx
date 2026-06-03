@@ -221,6 +221,17 @@ export default function History() {
                       {new Date(selectedEmail.sentAt).toLocaleString()}
                     </span>
                   )}
+                  
+                  {selectedEmail.status === "failed" && selectedEmail.errorDetails && (
+                    <div className="mt-4 border rounded-md overflow-hidden bg-slate-50">
+                      <div className="bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                        Error Diagnostic Details (JSON)
+                      </div>
+                      <pre className="p-3 text-[10px] overflow-x-auto text-slate-600 font-mono max-h-[200px] overflow-y-auto">
+                        {selectedEmail.errorDetails}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -165,7 +165,16 @@ async function sendEmailWithRetry(
   const estimatedSize = estimateMailSize(htmlWithSignature, attachments);
   if (estimatedSize > MAX_EMAIL_SIZE_BYTES) {
     const sizeMsg = `Email too large (~${Math.round(estimatedSize / 1024 / 1024)}MB). Gmail limit is 25MB. Remove large attachments.`;
-    await db.update(emailLogsTable).set({ status: "failed", errorType: "limit_reached", errorMessage: sizeMsg }).where(eq(emailLogsTable.id, logId));
+    await db.update(emailLogsTable).set({ 
+      status: "failed", 
+      errorType: "limit_reached", 
+      errorMessage: sizeMsg,
+      errorDetails: JSON.stringify({
+        estimatedSize,
+        attachmentCount: mailAttachments.length,
+        attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, originalSize: (a as any).originalSize }))
+      }, null, 2)
+    }).where(eq(emailLogsTable.id, logId));
     logger.warn({ logId, email: to.email, estimatedSize }, "Skipped: email too large");
     return;
   }
@@ -209,12 +218,23 @@ async function sendEmailWithRetry(
   } catch (err: unknown) {
     const error = err as Error;
     const { errorType, message } = classifyError(error);
-    await db.update(emailLogsTable).set({ status: "failed", errorType, errorMessage: message }).where(eq(emailLogsTable.id, logId));
+    await db.update(emailLogsTable).set({ 
+      status: "failed", 
+      errorType, 
+      errorMessage: message,
+      errorDetails: JSON.stringify({
+        rawError: error.message,
+        stack: error.stack,
+        method: isGmailApiAvailable() ? "gmail-api" : "smtp",
+        attachmentCount: mailAttachments.length,
+        attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType }))
+      }, null, 2)
+    }).where(eq(emailLogsTable.id, logId));
     logger.error({ logId, email: to.email, errorType, message }, "Email failed");
   }
 }
 
-async function getUserAttachments(userId: number, selectedCatalogId?: number): Promise<NmAttachment[]> {
+async function getUserAttachments(userId: number, selectedCatalogIds?: number[]): Promise<NmAttachment[]> {
   // Always fetch terms assigned to this user
   const termsRows = await db
     .select({
@@ -268,8 +288,8 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
     }
   }
 
-  // Fetch the selected catalog separately (if any)
-  if (selectedCatalogId !== undefined && selectedCatalogId !== null) {
+  // Fetch the selected catalogs separately (if any)
+  if (selectedCatalogIds && selectedCatalogIds.length > 0) {
     const catalogRows = await db
       .select({
         filename: attachmentsTable.filename,
@@ -283,10 +303,9 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
         and(
           eq(userAttachmentsTable.userId, userId),
           eq(attachmentsTable.isActive, true),
-          eq(attachmentsTable.id, selectedCatalogId)
+          inArray(attachmentsTable.id, selectedCatalogIds)
         )
-      )
-      .limit(1);
+      );
 
     for (const r of catalogRows) {
       const decompressed = decompressContent(r.content) || "";
@@ -327,7 +346,7 @@ async function getUserAttachments(userId: number, selectedCatalogId?: number): P
 }
 
 router.post("/emails/send", requireAuth, async (req, res) => {
-  const { accountId, templateId, recipients, subject, htmlContent, delaySeconds, selectedCatalogId } = req.body;
+  const { accountId, templateId, recipients, subject, htmlContent, delaySeconds, selectedCatalogIds } = req.body;
   if (!accountId || !templateId || !recipients || !subject) {
     res.status(400).json({ error: "accountId, templateId, recipients, subject required" });
     return;
@@ -355,6 +374,10 @@ router.post("/emails/send", requireAuth, async (req, res) => {
     return;
   }
 
+  const catalogIdsArray = Array.isArray(selectedCatalogIds) 
+    ? selectedCatalogIds 
+    : (req.body.selectedCatalogId ? [req.body.selectedCatalogId] : null);
+
   const logInserts = valid.map(r => ({
     accountId,
     templateId,
@@ -362,6 +385,7 @@ router.post("/emails/send", requireAuth, async (req, res) => {
     recipientName: r.name || null,
     subject,
     status: "pending" as const,
+    selectedCatalogIds: catalogIdsArray,
   }));
 
   const inserted = await db.insert(emailLogsTable).values(logInserts).returning({ id: emailLogsTable.id });
@@ -422,8 +446,7 @@ router.post("/emails/send", requireAuth, async (req, res) => {
   }
 
   setImmediate(async () => {
-    const catalogId = selectedCatalogId ? parseInt(selectedCatalogId) : undefined;
-    const attachments = await getUserAttachments(sendingUserId, catalogId);
+    const attachments = await getUserAttachments(sendingUserId, catalogIdsArray || undefined);
 
     if (delay > 0) {
       // Sequential with delay between sends
@@ -476,7 +499,9 @@ router.get("/emails/history", requireAuth, async (req, res) => {
         recipientName: emailLogsTable.recipientName,
         subject: emailLogsTable.subject,
         status: emailLogsTable.status,
+        errorType: emailLogsTable.errorType,
         errorMessage: emailLogsTable.errorMessage,
+        errorDetails: emailLogsTable.errorDetails,
         sentAt: emailLogsTable.sentAt,
         createdAt: emailLogsTable.createdAt,
       })

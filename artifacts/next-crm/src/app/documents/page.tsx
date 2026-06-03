@@ -433,6 +433,7 @@ export default function Documents() {
           <TableRow>
             <TableHead>Document Title</TableHead>
             <TableHead>Filename</TableHead>
+            <TableHead>Size (MB)</TableHead>
             <TableHead>Assigned To</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
@@ -451,6 +452,9 @@ export default function Documents() {
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground font-mono">
                   {doc.filename}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {typeof (doc as any).sizeBytes === 'number' ? `${((doc as any).sizeBytes / 1024 / 1024).toFixed(2)} MB` : '-'}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1 max-w-[280px]">

@@ -79,8 +79,8 @@ async function getAttachmentBuffer(contentStr: string | null): Promise<{ buffer:
   return { buffer: Buffer.from(decompressed, "base64") };
 }
 
-async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
-  const rows = await db
+async function getUserAttachments(userId: number, selectedCatalogIds?: number[] | null): Promise<NmAttachment[]> {
+  const termsRows = await db
     .select({
       filename: attachmentsTable.filename,
       content: attachmentContentsTable.content,
@@ -93,11 +93,11 @@ async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
       and(
         eq(userAttachmentsTable.userId, userId),
         eq(attachmentsTable.isActive, true),
-        sql`${attachmentsTable.type} IN ('terms', 'catalog')`
+        eq(attachmentsTable.type, 'terms')
       )
     );
 
-  const attachmentPromises = rows.map(async r => {
+  const attachmentPromises = termsRows.map(async r => {
     const { buffer, originalSize } = await getAttachmentBuffer(r.content);
     return {
       filename: r.filename,
@@ -106,8 +106,42 @@ async function getUserAttachments(userId: number): Promise<NmAttachment[]> {
       originalSize,
     };
   });
+  
+  const results = await Promise.all(attachmentPromises);
 
-  return Promise.all(attachmentPromises);
+  if (selectedCatalogIds && selectedCatalogIds.length > 0) {
+    const catalogRows = await db
+      .select({
+        filename: attachmentsTable.filename,
+        content: attachmentContentsTable.content,
+        mimeType: attachmentsTable.mimeType,
+      })
+      .from(attachmentsTable)
+      .innerJoin(attachmentContentsTable, eq(attachmentContentsTable.attachmentId, attachmentsTable.id))
+      .innerJoin(userAttachmentsTable, eq(userAttachmentsTable.attachmentId, attachmentsTable.id))
+      .where(
+        and(
+          eq(userAttachmentsTable.userId, userId),
+          eq(attachmentsTable.isActive, true),
+          inArray(attachmentsTable.id, selectedCatalogIds)
+        )
+      );
+
+    const catalogPromises = catalogRows.map(async r => {
+      const { buffer, originalSize } = await getAttachmentBuffer(r.content);
+      return {
+        filename: r.filename,
+        content: buffer,
+        contentType: r.mimeType,
+        originalSize,
+      };
+    });
+    
+    const catalogResults = await Promise.all(catalogPromises);
+    results.push(...catalogResults);
+  }
+
+  return results;
 }
 
 // GET or POST /api/cron/process-queue
@@ -273,7 +307,10 @@ export async function GET(req: Request) {
       .where(eq(usersTable.email, account.email))
       .limit(1);
 
-    const attachments = await getUserAttachments(associatedUser ? associatedUser.id : 0);
+    const attachments = await getUserAttachments(
+      associatedUser ? associatedUser.id : 0, 
+      pendingEmail.selectedCatalogIds
+    );
 
     const mailAttachments = [...attachments];
     if (customBannerRow) {
@@ -292,7 +329,16 @@ export async function GET(req: Request) {
       const sizeMsg = `Email too large (~${Math.round(estimatedSize / 1024 / 1024)}MB). Gmail limit is 25MB. Remove large attachments.`;
       await db
         .update(emailLogsTable)
-        .set({ status: "failed", errorType: "limit_reached", errorMessage: sizeMsg })
+        .set({ 
+          status: "failed", 
+          errorType: "limit_reached", 
+          errorMessage: sizeMsg,
+          errorDetails: JSON.stringify({
+            estimatedSize,
+            attachmentCount: mailAttachments.length,
+            attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, originalSize: (a as any).originalSize }))
+          }, null, 2)
+        })
         .where(eq(emailLogsTable.id, pendingEmail.id));
       return NextResponse.json({ error: "Email size limit exceeded", logId: pendingEmail.id });
     }
@@ -344,23 +390,37 @@ export async function GET(req: Request) {
 
   } catch (err: any) {
     console.error("Queue execution error:", err.message);
+  } catch (err: unknown) {
+    console.error("Queue execution error:", (err as Error).message);
     // Update db with failure
     try {
-      const { errorType, message } = classifyError(err);
+      const error = err as Error;
+      const { errorType, message } = classifyError(error);
       const { searchParams } = new URL(req.url);
       const logIdQuery = searchParams.get("logId");
-      const targetId = logIdQuery ? parseInt(logIdQuery) : null;
+      const targetId = logIdQuery ? parseInt(logIdQuery) : pendingEmail?.id;
       
       if (targetId) {
         await db
           .update(emailLogsTable)
-          .set({ status: "failed", errorType, errorMessage: message })
+          .set({ 
+            status: "failed", 
+            errorType, 
+            errorMessage: message,
+            errorDetails: JSON.stringify({
+              rawError: error.message,
+              stack: error.stack,
+              method: isGmailApiAvailable() ? "gmail-api" : "smtp",
+              attachmentCount: typeof mailAttachments !== 'undefined' ? mailAttachments.length : 0,
+              attachments: typeof mailAttachments !== 'undefined' ? mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType })) : []
+            }, null, 2)
+          })
           .where(eq(emailLogsTable.id, targetId));
       }
     } catch (e: any) {
       console.error("Failed to write error to db:", e.message);
     }
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
 }
 

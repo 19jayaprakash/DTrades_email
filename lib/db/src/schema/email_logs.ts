@@ -20,6 +20,8 @@ export const emailLogsTable = pgTable("email_logs", {
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   scheduledAt: timestamp("scheduled_at").notNull().defaultNow(),
+  selectedCatalogIds: integer("selected_catalog_ids").array(),
+  errorDetails: text("error_details"), // Store JSON string for simplicity
 });
 
 export const insertEmailLogSchema = createInsertSchema(emailLogsTable).omit({ id: true, createdAt: true });

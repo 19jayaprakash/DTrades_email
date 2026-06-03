@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,7 +26,7 @@ const composeSchema = z.object({
   templateId: z.coerce.number().min(1, "Please select a template"),
   subject: z.string().min(1, "Subject is required"),
   recipients: z.string().min(1, "Please provide at least one recipient"),
-  selectedCatalogId: z.coerce.number().optional().nullable(),
+  selectedCatalogIds: z.array(z.coerce.number()).default([]),
 });
 
 type ComposeValues = z.infer<typeof composeSchema>;
@@ -47,7 +48,7 @@ export default function Compose() {
       templateId: 0,
       subject: "",
       recipients: "",
-      selectedCatalogId: null,
+      selectedCatalogIds: [],
     }
   });
 
@@ -79,7 +80,7 @@ export default function Compose() {
           subject: data.subject,
           recipients: data.recipients,
           delaySeconds: 0,
-          selectedCatalogId: data.selectedCatalogId === 0 ? null : data.selectedCatalogId,
+          selectedCatalogIds: data.selectedCatalogIds,
         } as any
       });
       toast({
@@ -91,7 +92,7 @@ export default function Compose() {
         templateId: data.templateId,
         subject: data.subject,
         recipients: "",
-        selectedCatalogId: null,
+        selectedCatalogIds: [],
       });
     } catch (e: any) {
       toast({
@@ -270,36 +271,42 @@ export default function Compose() {
                       </div>
 
                       {/* Right Box - Selectable Product Catalog */}
-                      <div className="space-y-2 pl-2">
+                      <div className="space-y-3 pl-2">
                         <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                          🌾 Select Regional Catalog (Choose One)
+                          🌾 Select Regional Catalogs
                         </span>
                         {(userAttachments || []).filter(att => (att as any).type === "catalog").length > 0 ? (
                           <FormField
                             control={form.control}
-                            name="selectedCatalogId"
+                            name="selectedCatalogIds"
                             render={({ field }) => (
-                              <FormItem className="space-y-1">
-                                <Select 
-                                  onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))} 
-                                  value={field.value ? field.value.toString() : "none"}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="bg-white h-9 text-xs">
-                                      <SelectValue placeholder="Select regional brochure..." />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="none">None (No Catalog Attached)</SelectItem>
-                                    {(userAttachments || [])
-                                      .filter(att => (att as any).type === "catalog")
-                                      .map(c => (
-                                        <SelectItem key={c.id} value={c.id.toString()} className="text-xs">
-                                          📖 {c.name}
-                                        </SelectItem>
-                                      ))}
-                                  </SelectContent>
-                                </Select>
+                              <FormItem className="space-y-2.5">
+                                {(userAttachments || [])
+                                  .filter(att => (att as any).type === "catalog")
+                                  .map(c => (
+                                    <div key={c.id} className="flex items-center space-x-2.5">
+                                      <FormControl>
+                                        <Checkbox
+                                          id={`catalog-${c.id}`}
+                                          checked={field.value?.includes(c.id)}
+                                          onCheckedChange={(checked) => {
+                                            const current = field.value || [];
+                                            if (checked) {
+                                              field.onChange([...current, c.id]);
+                                            } else {
+                                              field.onChange(current.filter(id => id !== c.id));
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
+                                      <label
+                                        htmlFor={`catalog-${c.id}`}
+                                        className="text-xs font-medium leading-none cursor-pointer text-slate-700"
+                                      >
+                                        📖 {c.name}
+                                      </label>
+                                    </div>
+                                  ))}
                                 <FormMessage />
                               </FormItem>
                             )}
