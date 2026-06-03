@@ -388,8 +388,6 @@ export async function GET(req: Request) {
     console.log(`Email successfully sent to ${pendingEmail.recipientEmail}`);
     return NextResponse.json({ success: true, logId: pendingEmail.id, recipient: pendingEmail.recipientEmail });
 
-  } catch (err: any) {
-    console.error("Queue execution error:", err.message);
   } catch (err: unknown) {
     console.error("Queue execution error:", (err as Error).message);
     // Update db with failure
