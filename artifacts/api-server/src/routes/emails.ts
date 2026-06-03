@@ -1,7 +1,7 @@
 import { Router } from "express";
 import nodemailer from "nodemailer";
 import { db, accountsTable, templatesTable, emailLogsTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable } from "@workspace/db";
-import { eq, and, gte, lte, count, sql, or } from "drizzle-orm";
+import { eq, and, gte, lte, count, sql, or, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 import { sendViaGmailApi, isGmailApiAvailable } from "../lib/gmail-sender";
