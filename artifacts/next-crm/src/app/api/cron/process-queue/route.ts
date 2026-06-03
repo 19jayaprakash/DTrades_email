@@ -155,9 +155,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let pendingEmail: any = null;
+  let mailAttachments: any[] = [];
+
   try {
     // 1. Fetch next pending email whose scheduledAt timestamp has matured
-    const [pendingEmail] = await db
+    const pendingRows = await db
       .select()
       .from(emailLogsTable)
       .where(
@@ -168,6 +171,8 @@ export async function GET(req: Request) {
       )
       .orderBy(emailLogsTable.scheduledAt)
       .limit(1);
+
+    pendingEmail = pendingRows[0];
 
     if (!pendingEmail) {
       return NextResponse.json({ message: "No pending emails scheduled for this interval" });
@@ -312,7 +317,7 @@ export async function GET(req: Request) {
       pendingEmail.selectedCatalogIds
     );
 
-    const mailAttachments = [...attachments];
+    mailAttachments = [...attachments];
     if (customBannerRow) {
       const bannerBuffer = await getAttachmentBuffer(customBannerRow.content);
       mailAttachments.push({
