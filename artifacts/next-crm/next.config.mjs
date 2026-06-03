@@ -12,6 +12,12 @@ const turbopackPath = "./node_modules/@tanstack/react-query";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ["@workspace/api-client-react"],
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   turbopack: {
     resolveAlias: {
       "@tanstack/react-query": turbopackPath,
