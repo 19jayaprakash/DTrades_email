@@ -19,15 +19,13 @@ const transporterCache = new Map<number, nodemailer.Transporter>();
 function getTransporter(accountRow: typeof accountsTable.$inferSelect): nodemailer.Transporter {
   let transporter = transporterCache.get(accountRow.id);
   if (!transporter) {
+    const isGmail = (accountRow.smtpHost || '').toLowerCase().includes('gmail.com');
     transporter = nodemailer.createTransport({
-      pool: true,
-      maxConnections: 1,
-      maxMessages: 100,
       host: accountRow.smtpHost,
       port: accountRow.smtpPort,
       secure: accountRow.smtpPort === 465,
       auth: { user: accountRow.smtpUser, pass: accountRow.smtpPass },
-      tls: { rejectUnauthorized: false },
+      ...(isGmail ? {} : { tls: { rejectUnauthorized: false } }),
     });
     transporterCache.set(accountRow.id, transporter);
   }
@@ -368,7 +366,6 @@ export async function GET(req: Request) {
       } as any);
     } else {
       const transporter = getTransporter(account);
-      const messageId = `<${Date.now()}-${Math.random().toString(36).substring(2, 10)}@${account.email.split('@')[1] || 'dtrades.com'}>`;
       await transporter.sendMail({
         from: `"${account.name}" <${account.email}>`,
         replyTo: account.email,
@@ -377,11 +374,8 @@ export async function GET(req: Request) {
         html: htmlWithSignature,
         text: textFallback,
         attachments: mailAttachments,
-        messageId: messageId,
         headers: {
-          "List-Unsubscribe": `<mailto:${account.email}?subject=unsubscribe>`,
-          "Precedence": "bulk",
-          "X-Entity-Ref-ID": messageId
+          "List-Unsubscribe": `<mailto:${account.email}?subject=unsubscribe>`
         }
       });
     }
