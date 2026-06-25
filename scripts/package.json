@@ -10,9 +10,9 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/node": "catalog:",
+    "@types/node": "^25.3.3",
     "bcryptjs": "^2.4.3",
-    "drizzle-orm": "catalog:",
-    "tsx": "catalog:"
+    "drizzle-orm": "^0.45.2",
+    "tsx": "^4.21.0"
   }
 }

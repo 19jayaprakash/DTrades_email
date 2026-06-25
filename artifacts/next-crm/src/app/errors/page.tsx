@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCcw } from "lucide-react";
+import { Loader2, RefreshCcw, CheckCircle2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,20 +50,26 @@ export default function Errors() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight font-serif text-[#1e293b]">System Errors</h1>
+        <div className="animate-fade-in-up">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">System Errors</h1>
           <p className="text-muted-foreground text-sm">Log of failed operations and sending errors.</p>
         </div>
 
-        <Card>
+        <Card className="rounded-2xl animate-fade-in-up stagger-1">
           <CardHeader>
-            <CardTitle className="text-lg font-serif">Error Log</CardTitle>
+            <CardTitle className="text-base font-semibold">Error Log</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="flex justify-center p-8"><Loader2 className="animate-spin text-primary" /></div>
             ) : errors?.length === 0 ? (
-              <p className="text-center text-muted-foreground p-8 text-sm">No recent errors.</p>
+              <div className="flex flex-col items-center justify-center p-12 gap-4">
+                <CheckCircle2 className="h-16 w-16 text-primary/40" />
+                <div className="text-center">
+                  <p className="text-base font-medium text-foreground">All Clear</p>
+                  <p className="text-sm text-muted-foreground mt-1">No recent errors found. Everything is running smoothly.</p>
+                </div>
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -78,7 +84,7 @@ export default function Errors() {
                 </TableHeader>
                 <TableBody>
                   {errors?.map((err) => (
-                    <TableRow key={err.id}>
+                    <TableRow key={err.id} className="hover:bg-primary/[0.02] transition-all duration-150">
                       <TableCell className="text-xs whitespace-nowrap">{new Date(err.createdAt).toLocaleString()}</TableCell>
                       <TableCell className="font-medium text-sm">{err.accountName}</TableCell>
                       <TableCell className="text-sm">{err.recipientEmail}</TableCell>

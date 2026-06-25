@@ -26,10 +26,10 @@ const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
   region: z.string().min(1, "Region is required"),
-  smtpHost: z.string().min(1, "SMTP Host is required"),
-  smtpPort: z.coerce.number().min(1, "SMTP Port is required"),
-  smtpUser: z.string().min(1, "SMTP User is required"),
-  smtpPass: z.string().optional(),
+  smtpHost: z.string().default("mail.dtradesinternational.in"),
+  smtpPort: z.coerce.number().default(465),
+  smtpUser: z.string().default(""),
+  smtpPass: z.string().default(""),
   dailyLimit: z.coerce.number().optional(),
   isActive: z.boolean().optional(),
   signature: z.string().optional(),
@@ -59,8 +59,8 @@ export default function Accounts() {
       name: "",
       email: "",
       region: "",
-      smtpHost: "smtp.gmail.com",
-      smtpPort: 587,
+      smtpHost: "mail.dtradesinternational.in",
+      smtpPort: 465,
       smtpUser: "",
       smtpPass: "",
       dailyLimit: 500,
@@ -97,20 +97,14 @@ export default function Accounts() {
           id: editingId, 
           data: {
             ...data,
-            ...(data.smtpPass ? { smtpPass: data.smtpPass } : { smtpPass: undefined }),
             signature: data.signature || "",
           }
         });
         toast({ title: "Account updated successfully" });
       } else {
-        if (!data.smtpPass) {
-          form.setError("smtpPass", { message: "SMTP Password is required for new accounts" });
-          return;
-        }
         await createMutation.mutateAsync({ 
           data: {
             ...data,
-            smtpPass: data.smtpPass,
             signature: data.signature || "",
           }
         });
@@ -146,8 +140,8 @@ export default function Accounts() {
       name: "",
       email: "",
       region: "",
-      smtpHost: "smtp.gmail.com",
-      smtpPort: 587,
+      smtpHost: "mail.dtradesinternational.in",
+      smtpPort: 465,
       smtpUser: "",
       smtpPass: "",
       dailyLimit: 500,
@@ -191,43 +185,60 @@ export default function Accounts() {
                     <FormField control={form.control} name="dailyLimit" render={({ field }) => (
                       <FormItem><FormLabel>Daily Limit</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                     )} />
-                    <FormField control={form.control} name="smtpHost" render={({ field }) => (
-                      <FormItem><FormLabel>SMTP Host</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="smtpPort" render={({ field }) => (
-                      <FormItem><FormLabel>SMTP Port</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="smtpUser" render={({ field }) => (
-                      <FormItem><FormLabel>SMTP User</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="smtpPass" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{editingId ? "New SMTP Password" : "SMTP Password"}</FormLabel>
-                        <div className="relative">
+
+                  </div>
+
+                  <div className="border-t pt-4 my-2">
+                    <h3 className="text-sm font-semibold text-slate-800 mb-3">SMTP Settings</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="smtpHost" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SMTP Host</FormLabel>
+                          <FormControl><Input {...field} placeholder="e.g. mail.dtradesinternational.in" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="smtpPort" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SMTP Port</FormLabel>
+                          <FormControl><Input type="number" {...field} placeholder="465" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="smtpUser" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SMTP User</FormLabel>
+                          <FormControl><Input {...field} placeholder="e.g. user@domain.com" /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                      <FormField control={form.control} name="smtpPass" render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>SMTP Password</FormLabel>
                           <FormControl>
-                            <Input 
-                              type={showSmtpPass ? "text" : "password"} 
-                              {...field} 
-                              className="pr-10"
-                            />
+                            <div className="relative">
+                              <Input 
+                                 type="text" 
+                                 style={!showSmtpPass ? { ["WebkitTextSecurity" as any]: "disc" } : undefined} 
+                                 {...field} 
+                                 placeholder="••••••••" 
+                                 autoComplete="off" 
+                               />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                onClick={() => setShowSmtpPass(!showSmtpPass)}
+                              >
+                                {showSmtpPass ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                              </Button>
+                            </div>
                           </FormControl>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                            onClick={() => setShowSmtpPass(!showSmtpPass)}
-                          >
-                            {showSmtpPass ? (
-                              <EyeOff className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <Eye className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
+                          <FormMessage />
+                        </FormItem>
+                      )} />
+                    </div>
                   </div>
 
                   <FormField control={form.control} name="signature" render={({ field }) => (
@@ -292,7 +303,7 @@ export default function Accounts() {
                     <TableHead>Region</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Daily Limit</TableHead>
-                    <TableHead>SMTP</TableHead>
+
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -318,12 +329,7 @@ export default function Accounts() {
                           <Progress value={acc.dailyLimit ? ((acc.sentToday || 0) / acc.dailyLimit) * 100 : 0} />
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">
-                        <div className="text-sm">{acc.smtpHost}:{acc.smtpPort}</div>
-                        <div className="text-xs text-muted-foreground">
-                          User: {acc.smtpUser} • Pass: {acc.smtpPass ? "••••••••" : "Not Set"}
-                        </div>
-                      </TableCell>
+
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="icon" onClick={() => openEdit(acc)}><Edit2 className="h-4 w-4" /></Button>

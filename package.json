@@ -2,15 +2,18 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "workspaces": [
+    "artifacts/*",
+    "lib/*"
+  ],
   "scripts": {
     "preinstall": "node -e \"if (process.platform === 'win32') console.log('Windows mode')\"",
-    "dev": "node --env-file=.env -e \"process.env.NODE_ENV='development'\" && pnpm run build && pnpm run start",
-    "start": "pnpm -r --parallel --if-present run start",
-    "start:api": "node --max-old-space-size=400 artifacts/api-server/dist/index.mjs",
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "dev": "node --env-file=.env -e \"process.env.NODE_ENV='development'\" && npm run build && npm run start",
+    "start": "npm run start --workspaces --if-present",
+    "build": "npm run typecheck && npm run build --workspaces --if-present",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "db:push": "pnpm --filter @workspace/db run push"
+    "typecheck": "npm run typecheck:libs && npm run typecheck --workspaces --if-present",
+    "db:push": "npm run push -w @workspace/db"
   },
   "private": true,
   "devDependencies": {

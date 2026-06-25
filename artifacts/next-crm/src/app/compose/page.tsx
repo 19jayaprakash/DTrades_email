@@ -1,12 +1,11 @@
 "use client";
 
 import { AppLayout } from "@/components/layout/AppLayout";
+import { useRouter } from "next/navigation";
 import {
   useListAccounts, getListAccountsQueryKey,
   useListTemplates, getListTemplatesQueryKey,
   useSendEmails,
-  useListAttachments,
-  getListAttachmentsQueryKey
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -20,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Send, Users, Paperclip } from "lucide-react";
+import { Loader2, Send, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -37,6 +36,7 @@ type ComposeValues = z.infer<typeof composeSchema>;
 export default function Compose() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
   const isAdmin = user?.role === "admin";
 
   const { data: allAccounts, isLoading: accountsLoading } = useListAccounts({ query: { queryKey: getListAccountsQueryKey() } });
@@ -55,10 +55,7 @@ export default function Compose() {
     }
   });
 
-  const { data: userAttachments, isLoading: attachmentsLoading } = useListAttachments(
-    { userId: user?.id },
-    { query: { queryKey: getListAttachmentsQueryKey({ userId: user?.id }), enabled: !!user?.id } }
-  );
+  // Attachments query removed (attachments disabled)
 
   const accounts = isAdmin
     ? allAccounts?.filter(a => a.isActive)
@@ -90,6 +87,7 @@ export default function Compose() {
         title: "Emails sent",
         description: `${res.queued} of ${res.recipients} emails queued successfully.`
       });
+      router.push("/history");
       form.reset({
         accountId: data.accountId,
         templateId: data.templateId,
@@ -111,8 +109,8 @@ export default function Compose() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight font-serif text-[#1e293b]">Send Email</h1>
+        <div className="animate-fade-in-up">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Send Email</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Compose and send outreach emails on behalf of D Trades International.
           </p>
@@ -123,9 +121,9 @@ export default function Compose() {
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-              <Card>
+              <Card className="rounded-2xl animate-fade-in-up stagger-1">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-base font-serif">Campaign Settings</CardTitle>
+                  <CardTitle className="text-base font-semibold text-foreground">Campaign Settings</CardTitle>
                   <CardDescription className="text-sm">Choose the sender account and email template.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -197,15 +195,18 @@ export default function Compose() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="rounded-2xl animate-fade-in-up stagger-2">
                 <CardHeader className="pb-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-base font-serif">Recipients</CardTitle>
+                      <CardTitle className="text-base font-semibold text-foreground">Recipients</CardTitle>
                       <CardDescription className="text-sm mt-1">One per line — email address or Name,email format.</CardDescription>
                     </div>
                     {recipientCount > 0 && (
-                      <Badge variant="secondary" className="gap-1.5 text-xs">
+                      <Badge
+                        className="gap-1.5 text-xs text-white border-0"
+                        style={{ background: 'linear-gradient(135deg, hsl(234, 85%, 58%), hsl(262, 83%, 58%))' }}
+                      >
                         <Users className="h-3 w-3" />
                         {recipientCount} recipient{recipientCount !== 1 ? "s" : ""}
                       </Badge>
@@ -232,96 +233,15 @@ export default function Compose() {
                 </CardContent>
               </Card>
 
-              {/* Attachments zone */}
-              <Card className="border-primary/10 shadow-xs bg-slate-50/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1.5 font-serif">
-                    <Paperclip className="h-4 w-4 text-primary animate-pulse" />
-                    Campaign Attachment Settings
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Visual catalogs and regulatory terms assigned to your regional profile.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {attachmentsLoading ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                      <span>Retrieving assigned documents...</span>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-3">
-                      {/* Left Box - Terms & Conditions (Auto Attached) */}
-                      <div className="space-y-2 border-r pr-4">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                          📋 Regulatory Terms (Auto-Attached)
-                        </span>
-                        {(userAttachments || []).filter(att => (att as any).type === "terms").length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {(userAttachments || [])
-                              .filter(att => (att as any).type === "terms")
-                              .map(att => (
-                                <Badge key={att.id} variant="secondary" className="text-xs bg-white border border-slate-200 text-slate-700 font-medium px-2.5 py-1 shadow-2xs">
-                                  📄 {att.name}
-                                </Badge>
-                              ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic pt-1">
-                            No terms & conditions active for your profile.
-                          </p>
-                        )}
-                      </div>
 
-                      {/* Right Box - Selectable Product Catalog */}
-                      <div className="space-y-3 pl-2">
-                        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                          🌾 Select Regional Catalogs
-                        </span>
-                        {(userAttachments || []).filter(att => (att as any).type === "catalog").length > 0 ? (
-                          <FormField
-                            control={form.control}
-                            name="selectedCatalogIds"
-                            render={({ field }) => (
-                              <FormItem className="space-y-2.5">
-                                <FormControl>
-                                  <RadioGroup
-                                    onValueChange={(val) => field.onChange([parseInt(val, 10)])}
-                                    value={field.value?.[0]?.toString() || ""}
-                                    className="space-y-2.5"
-                                  >
-                                    {(userAttachments || [])
-                                      .filter(att => (att as any).type === "catalog")
-                                      .map(c => (
-                                        <div key={c.id} className="flex items-center space-x-2.5">
-                                          <RadioGroupItem value={c.id.toString()} id={`catalog-${c.id}`} />
-                                          <label
-                                            htmlFor={`catalog-${c.id}`}
-                                            className="text-xs font-medium leading-none cursor-pointer text-slate-700"
-                                          >
-                                            📖 {c.name}
-                                          </label>
-                                        </div>
-                                      ))}
-                                  </RadioGroup>
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        ) : (
-                          <p className="text-xs text-muted-foreground italic pt-2">
-                            No catalogs assigned to your profile.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
 
-              <div className="flex justify-end bg-slate-50/80 rounded-lg px-5 py-4 border gap-4">
-                <Button type="submit" disabled={sendMutation.isPending} className="min-w-[140px] shadow-sm">
+              <div className="flex justify-end glass rounded-2xl border px-5 py-4 gap-4 animate-fade-in-up stagger-3">
+                <Button
+                  type="submit"
+                  disabled={sendMutation.isPending}
+                  className="min-w-[140px] shadow-sm text-white hover:opacity-90 border-0"
+                  style={{ background: 'linear-gradient(135deg, hsl(234, 85%, 58%), hsl(262, 83%, 58%))' }}
+                >
                   {sendMutation.isPending
                     ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Sending...</>
                     : <><Send className="mr-2 h-4 w-4" />Send Emails</>

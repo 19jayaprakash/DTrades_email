@@ -55,3 +55,10 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Temp node_modules backups and scratch files
+*_old/
+*_old_new/
+node_modules_old_new/
+scratch/
+package-lock.json

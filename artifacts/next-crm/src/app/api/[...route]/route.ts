@@ -1,4 +1,12 @@
 import { NextResponse } from "next/server";
+import { getWsServer, broadcastStatusUpdate } from "@/lib/ws-server";
+
+// Start WebSocket server on load
+try {
+  getWsServer();
+} catch (e) {
+  console.error("Failed to start WebSocket server:", e);
+}
 export const dynamic = "force-dynamic";
 import bcrypt from "bcryptjs";
 import { db, usersTable, accountsTable, templatesTable, emailLogsTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable, attachmentChunksTable } from "@workspace/db";
@@ -149,7 +157,15 @@ export async function GET(req: Request, { params }: { params: Promise<{ route: s
     } else {
       // GET list templates
       const templates = await db.select().from(templatesTable).orderBy(templatesTable.name);
-      return NextResponse.json(templates);
+      if (authUser.role === "admin") {
+        return NextResponse.json(templates);
+      } else {
+        const filtered = templates.filter(t => {
+          const ids = (t as any).assignedUserIds || [];
+          return ids.length === 0 || ids.includes(authUser.id);
+        });
+        return NextResponse.json(filtered);
+      }
     }
   }
 
@@ -263,10 +279,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ route: s
       if (dateFrom) conditions.push(gte(emailLogsTable.createdAt, new Date(dateFrom)));
       if (dateTo) conditions.push(lte(emailLogsTable.createdAt, new Date(dateTo)));
 
+      // Enforce non-admin visibility limits
+      if (authUser.role !== "admin") {
+        conditions.push(eq(accountsTable.email, authUser.email));
+      }
+
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
       const [totalResult, rows] = await Promise.all([
-        db.select({ count: count() }).from(emailLogsTable).where(whereClause),
+        db
+          .select({ count: count() })
+          .from(emailLogsTable)
+          .leftJoin(accountsTable, eq(emailLogsTable.accountId, accountsTable.id))
+          .where(whereClause),
         db
           .select({
             id: emailLogsTable.id,
@@ -484,7 +509,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const { email, name, password, role, region, smtpHost, smtpPort, smtpUser, smtpPass, dailyLimit } = body;
+    const { email, name, password, role, region, dailyLimit, smtpHost, smtpPort, smtpPass } = body;
     if (!email || !name || !password) {
       return NextResponse.json({ error: "Email, name, and password required" }, { status: 400 });
     }
@@ -498,34 +523,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
       region: region || null,
     }).returning();
 
-    if (smtpHost && smtpUser) {
-      const existing = await db.select().from(accountsTable).where(eq(accountsTable.smtpUser, smtpUser)).limit(1);
-      if (existing[0]) {
-        await db.update(accountsTable).set({
-          email,
-          name,
-          region: region || "Global",
-          smtpHost,
-          smtpPort: smtpPort || 587,
-          smtpUser,
-          ...(smtpPass ? { smtpPass } : {}),
-          dailyLimit: dailyLimit || 500,
-          isActive: true,
-        }).where(eq(accountsTable.id, existing[0].id));
-      } else if (smtpPass) {
-        await db.insert(accountsTable).values({
-          name,
-          email,
-          region: region || "Global",
-          smtpHost,
-          smtpPort: smtpPort || 587,
-          smtpUser,
-          smtpPass,
-          dailyLimit: dailyLimit || 500,
-          isActive: true,
-        });
-      }
-    }
+    // Auto-create associated sender account in accountsTable
+    await db.insert(accountsTable).values({
+      name,
+      email,
+      region: region || "Global",
+      smtpHost: smtpHost || "mail.dtradesinternational.in",
+      smtpPort: smtpPort || 465,
+      smtpUser: email, // Email and SMTP user are always the same
+      smtpPass: smtpPass || "",
+      dailyLimit: dailyLimit || 500,
+      isActive: true,
+    });
 
     return NextResponse.json(user, { status: 201 });
   }
@@ -536,17 +545,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
     if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { name, email, region, smtpHost, smtpPort, smtpUser, smtpPass, dailyLimit, signature } = body;
-    if (!name || !email || !region || !smtpHost || !smtpUser || !smtpPass) {
+    if (!name || !email || !region) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
     const [account] = await db.insert(accountsTable).values({
       name,
       email,
       region,
-      smtpHost,
-      smtpPort: smtpPort || 587,
-      smtpUser,
-      smtpPass,
+      smtpHost: smtpHost || "",
+      smtpPort: smtpPort || 465,
+      smtpUser: smtpUser || "",
+      smtpPass: smtpPass || "",
       dailyLimit: dailyLimit || 500,
       signature: signature || null,
     }).returning();
@@ -559,7 +568,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
     if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const { name, subject, htmlContent, textContent, category, variables } = body;
+    const { name, subject, htmlContent, textContent, category, variables, assignedUserIds } = body;
     if (!name || !subject || !htmlContent) {
       return NextResponse.json({ error: "Name, subject, and htmlContent required" }, { status: 400 });
     }
@@ -570,6 +579,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
       textContent: textContent || null,
       category: category || null,
       variables: variables || [],
+      assignedUserIds: assignedUserIds || [],
     }).returning();
 
     return NextResponse.json(template, { status: 201 });
@@ -748,6 +758,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
       insertedCount += inserted.length;
     }
 
+    // Trigger queue processing asynchronously in the background
+    const cronUrl = new URL("/api/cron/process-queue", req.url).toString();
+    const cronHeaders: Record<string, string> = {};
+    if (process.env.CRON_SECRET) {
+      cronHeaders["Authorization"] = `Bearer ${process.env.CRON_SECRET}`;
+    }
+    fetch(cronUrl, { headers: cronHeaders }).catch((err) => console.error("Error triggering cron:", err));
+
+    // Broadcast queue update via WebSocket
+    broadcastStatusUpdate({
+      type: "emails_queued",
+      data: {
+        count: insertedCount,
+      }
+    });
+
     return NextResponse.json({
       queued: insertedCount,
       recipients: valid.length,
@@ -776,6 +802,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
       .set({ status: "pending", errorMessage: null, errorType: null, scheduledAt: new Date() })
       .where(eq(emailLogsTable.id, id));
 
+    // Trigger queue processing asynchronously in the background
+    const cronUrl = new URL("/api/cron/process-queue", req.url).toString();
+    const cronHeaders: Record<string, string> = {};
+    if (process.env.CRON_SECRET) {
+      cronHeaders["Authorization"] = `Bearer ${process.env.CRON_SECRET}`;
+    }
+    fetch(cronUrl, { headers: cronHeaders }).catch((err) => console.error("Error triggering cron:", err));
+
     return NextResponse.json({ success: true, message: "Retry successfully rescheduled in database queue!" });
   }
 
@@ -796,7 +830,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ route:
   if (route[0] === "users") {
     if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const { name, role, region, isActive, password, smtpHost, smtpPort, smtpUser, smtpPass, dailyLimit } = body;
+    const { name, role, region, isActive, password, dailyLimit, smtpHost, smtpPort, smtpPass } = body;
     const updates: Record<string, any> = {};
     if (name !== undefined) updates.name = name;
     if (role !== undefined) updates.role = role;
@@ -819,38 +853,33 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ route:
 
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    if (smtpHost !== undefined || smtpUser !== undefined || smtpPass !== undefined || dailyLimit !== undefined) {
-      let existing = await db.select().from(accountsTable).where(eq(accountsTable.email, user.email)).limit(1);
-      if (!existing[0] && smtpUser) {
-        existing = await db.select().from(accountsTable).where(eq(accountsTable.smtpUser, smtpUser)).limit(1);
-      }
+    // Sync changes to the associated accountsTable row
+    const [existing] = await db.select().from(accountsTable).where(eq(accountsTable.email, user.email)).limit(1);
+    if (existing) {
+      const accUpdates: Record<string, any> = {};
+      if (name !== undefined) accUpdates.name = name;
+      if (region !== undefined) accUpdates.region = region || "Global";
+      if (dailyLimit !== undefined) accUpdates.dailyLimit = dailyLimit;
+      if (isActive !== undefined) accUpdates.isActive = isActive;
+      if (smtpHost !== undefined) accUpdates.smtpHost = smtpHost || "mail.dtradesinternational.in";
+      if (smtpPort !== undefined) accUpdates.smtpPort = smtpPort;
+      if (smtpPass !== undefined) accUpdates.smtpPass = smtpPass;
+      accUpdates.smtpUser = user.email; // Email and SMTP user are always the same
 
-      if (existing[0]) {
-        const accUpdates: Record<string, any> = {};
-        accUpdates.email = user.email;
-        if (name !== undefined) accUpdates.name = name;
-        if (region !== undefined) accUpdates.region = region || "Global";
-        if (smtpHost !== undefined) accUpdates.smtpHost = smtpHost;
-        if (smtpPort !== undefined) accUpdates.smtpPort = smtpPort;
-        if (smtpUser !== undefined) accUpdates.smtpUser = smtpUser;
-        if (smtpPass !== undefined && smtpPass !== "") accUpdates.smtpPass = smtpPass;
-        if (dailyLimit !== undefined) accUpdates.dailyLimit = dailyLimit;
-        if (isActive !== undefined) accUpdates.isActive = isActive;
-
-        await db.update(accountsTable).set(accUpdates).where(eq(accountsTable.id, existing[0].id));
-      } else if (smtpHost && smtpUser && smtpPass) {
-        await db.insert(accountsTable).values({
-          name: user.name,
-          email: user.email,
-          region: user.region || "Global",
-          smtpHost,
-          smtpPort: smtpPort || 587,
-          smtpUser,
-          smtpPass,
-          dailyLimit: dailyLimit || 500,
-          isActive: user.isActive,
-        });
-      }
+      await db.update(accountsTable).set(accUpdates).where(eq(accountsTable.id, existing.id));
+    } else {
+      // Auto-create account if it somehow doesn't exist
+      await db.insert(accountsTable).values({
+        name: user.name,
+        email: user.email,
+        region: user.region || "Global",
+        smtpHost: smtpHost || "mail.dtradesinternational.in",
+        smtpPort: smtpPort || 465,
+        smtpUser: user.email,
+        smtpPass: smtpPass || "",
+        dailyLimit: dailyLimit || 500,
+        isActive: user.isActive,
+      });
     }
 
     return NextResponse.json(user);
@@ -882,7 +911,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ route:
   if (route[0] === "templates") {
     if (!requireAdmin(authUser)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const { name, subject, htmlContent, textContent, category, variables } = body;
+    const { name, subject, htmlContent, textContent, category, variables, assignedUserIds } = body;
     const updates: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updates.name = name;
     if (subject !== undefined) updates.subject = subject;
@@ -890,6 +919,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ route:
     if (textContent !== undefined) updates.textContent = textContent;
     if (category !== undefined) updates.category = category;
     if (variables !== undefined) updates.variables = variables;
+    if (assignedUserIds !== undefined) updates.assignedUserIds = assignedUserIds;
 
     const [template] = await db.update(templatesTable).set(updates).where(eq(templatesTable.id, id)).returning();
     if (!template) return NextResponse.json({ error: "Template not found" }, { status: 404 });

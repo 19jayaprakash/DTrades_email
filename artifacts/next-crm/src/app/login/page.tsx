@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { FaPepperHot, FaPlaneDeparture, FaSeedling } from "react-icons/fa";
+import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -21,6 +22,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function Login() {
   const { login, user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<LoginFormValues>({
@@ -41,8 +43,17 @@ export default function Login() {
   const onSubmit = async (data: LoginFormValues) => {
     try {
       await login(data);
-    } catch (e) {
+      toast({
+        title: "Signed in",
+        description: "Welcome back to D Trades Global CRM.",
+      });
+    } catch (e: any) {
       form.setError("root", { message: "Invalid email or password" });
+      toast({
+        title: "Login failed",
+        description: "Invalid email or password. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -162,9 +173,10 @@ export default function Login() {
                         <div className="flex flex-col text-left w-full pr-8">
                           <label className="text-[10px] font-bold text-[#8a8eb5] uppercase tracking-wider mb-0.5 select-none">Password</label>
                           <input 
-                            type={showPassword ? "text" : "password"}
-                            placeholder="Enter new password" 
-                            autoComplete="current-password" 
+                            type="text"
+                            style={!showPassword ? { ["WebkitTextSecurity" as any]: "disc" } : undefined}
+                            placeholder="Enter your password" 
+                            autoComplete="off" 
                             className="text-sm font-medium text-[#1e293b] placeholder-[#aab0db] border-none p-0 focus:ring-0 focus:outline-none bg-transparent w-full"
                             {...field} 
                           />

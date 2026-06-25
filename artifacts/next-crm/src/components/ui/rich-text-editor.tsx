@@ -22,6 +22,8 @@ export function RichTextEditor({
   hasCustomBanner = false
 }: RichTextEditorProps) {
   const [isHtmlMode, setIsHtmlMode] = useState(false);
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
   const editorRef = useRef<HTMLDivElement>(null);
 
   // Sync internal innerHTML when external value changes
@@ -195,18 +197,83 @@ export function RichTextEditor({
           <span className="w-px h-6 bg-slate-200 mx-1" />
 
           {/* Links */}
-          <button
-            type="button"
-            onClick={() => {
-              const url = prompt("Enter the URL:");
-              if (url) execCommand("createLink", url);
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowLinkInput(!showLinkInput);
+                setLinkUrl("");
+              }}
+              className="p-2 hover:bg-slate-200 rounded text-slate-700 transition"
+              title="Insert Link"
+              disabled={isHtmlMode}
+            >
+              <Link className="h-4 w-4" />
+            </button>
+            
+            {showLinkInput && (
+              <div className="absolute top-10 left-0 bg-white border rounded-xl shadow-lg p-3 z-50 flex items-center gap-2 min-w-[280px] animate-scale-in">
+                <input
+                  type="text"
+                  placeholder="https://example.com"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  className="flex-1 text-xs border rounded-md p-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (linkUrl) {
+                        execCommand("createLink", linkUrl);
+                      }
+                      setShowLinkInput(false);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (linkUrl) {
+                      execCommand("createLink", linkUrl);
+                    }
+                    setShowLinkInput(false);
+                  }}
+                  className="bg-primary text-primary-foreground text-xs font-semibold px-2.5 py-1.5 rounded-md hover:bg-primary/95 transition cursor-pointer"
+                >
+                  Insert
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLinkInput(false)}
+                  className="border text-slate-500 hover:bg-slate-100 text-xs px-2.5 py-1.5 rounded-md transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
+          <span className="w-px h-6 bg-slate-200 mx-1" />
+
+          {/* Font Family Dropdown */}
+          <select
+            onChange={(e) => {
+              execCommand("fontName", e.target.value);
+              e.target.value = "";
             }}
-            className="p-2 hover:bg-slate-200 rounded text-slate-700 transition"
-            title="Insert Link"
+            className="p-1 border border-slate-200 rounded text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition cursor-pointer"
+            defaultValue=""
             disabled={isHtmlMode}
+            title="Font Family"
+            style={{ minWidth: "90px" }}
           >
-            <Link className="h-4 w-4" />
-          </button>
+            <option value="" disabled>Font</option>
+            <option value="Arial">Arial</option>
+            <option value="Verdana">Verdana</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Trebuchet MS">Trebuchet MS</option>
+          </select>
         </div>
 
         {/* Mode Toggle */}
@@ -265,7 +332,7 @@ export function RichTextEditor({
             ref={editorRef}
             contentEditable
             onInput={handleInput}
-            className="w-full h-full min-h-[300px] p-4 outline-none prose prose-sm max-w-none text-slate-800 bg-white overflow-y-auto"
+            className="w-full h-full min-h-[300px] p-4 outline-none prose prose-sm max-w-none text-slate-800 bg-white overflow-y-auto [&_a]:text-blue-600 [&_a]:underline"
             style={{ minHeight: "300px" }}
           />
         )}

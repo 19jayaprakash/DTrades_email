@@ -22,6 +22,17 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
+const statCardConfig: Record<string, string> = {
+  "Total Sent": "stat-icon-indigo",
+  "Delivered": "stat-icon-emerald",
+  "Failed": "stat-icon-rose",
+  "Pending": "stat-icon-amber",
+  "Open Rate": "stat-icon-indigo",
+  "Bounce Rate": "stat-icon-rose",
+  "Active Accounts": "stat-icon-emerald",
+  "Queue Total": "stat-icon-amber",
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
   const router = useRouter();
@@ -52,29 +63,51 @@ export default function Dashboard() {
     );
   }
 
+  const statCards = [
+    { title: "Total Sent", value: stats?.totalSent.toLocaleString() || "0", icon: Send },
+    { title: "Delivered", value: stats?.totalDelivered.toLocaleString() || "0", icon: CheckCircle2 },
+    { title: "Failed", value: stats?.totalFailed.toLocaleString() || "0", icon: AlertTriangle, variant: "destructive" as const },
+    { title: "Pending", value: stats?.totalPending.toLocaleString() || "0", icon: Clock },
+    { title: "Open Rate", value: `${(stats?.openRate || 0).toFixed(1)}%`, icon: TrendingUp },
+    { title: "Bounce Rate", value: `${(stats?.bounceRate || 0).toFixed(1)}%`, icon: TrendingDown },
+    { title: "Active Accounts", value: `${stats?.activeAccounts}/${stats?.totalAccounts}`, icon: Inbox },
+    { title: "Queue Total", value: queue?.total.toLocaleString() || "0", icon: Layers },
+  ];
+
   return (
     <AppLayout>
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#1e293b] font-serif">Overview</h1>
-          <p className="text-muted-foreground text-sm">Real-time pulse of your outreach operations.</p>
+        <div className="animate-fade-in-up">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            Welcome back
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Real-time pulse of your outreach operations.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard title="Total Sent" value={stats?.totalSent.toLocaleString() || "0"} icon={Send} />
-          <StatCard title="Delivered" value={stats?.totalDelivered.toLocaleString() || "0"} icon={CheckCircle2} />
-          <StatCard title="Failed" value={stats?.totalFailed.toLocaleString() || "0"} icon={AlertTriangle} variant="destructive" />
-          <StatCard title="Pending" value={stats?.totalPending.toLocaleString() || "0"} icon={Clock} />
-          <StatCard title="Open Rate" value={`${(stats?.openRate || 0).toFixed(1)}%`} icon={TrendingUp} />
-          <StatCard title="Bounce Rate" value={`${(stats?.bounceRate || 0).toFixed(1)}%`} icon={TrendingDown} />
-          <StatCard title="Active Accounts" value={`${stats?.activeAccounts}/${stats?.totalAccounts}`} icon={Inbox} />
-          <StatCard title="Queue Total" value={queue?.total.toLocaleString() || "0"} icon={Layers} />
+          {statCards.map((card, index) => (
+            <div key={card.title} className={`animate-fade-in-up stagger-${index + 1}`}>
+              <StatCard
+                title={card.title}
+                value={card.value}
+                icon={card.icon}
+                variant={card.variant || "default"}
+                iconClass={statCardConfig[card.title] || "stat-icon-indigo"}
+              />
+            </div>
+          ))}
         </div>
 
         <div className="grid gap-6 md:grid-cols-7">
-          <Card className="md:col-span-4">
+          <Card className="md:col-span-4 rounded-2xl animate-fade-in-up stagger-3">
             <CardHeader>
-              <CardTitle className="text-lg font-serif">Send Volume (30 Days)</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-6 rounded-full" style={{ background: 'linear-gradient(180deg, hsl(234, 85%, 58%), hsl(262, 83%, 58%))' }} />
+                <div>
+                  <CardTitle className="text-base font-semibold text-foreground">Send Volume</CardTitle>
+                  <p className="text-sm text-muted-foreground">Last 30 days activity</p>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
@@ -94,7 +127,7 @@ export default function Dashboard() {
                     <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '12px', border: '1px solid hsl(var(--border))', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
                     />
                     <Legend />
                     <Area type="monotone" dataKey="sent" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorSent)" name="Sent" />
@@ -105,23 +138,32 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="md:col-span-3">
+          <Card className="md:col-span-3 rounded-2xl animate-fade-in-up stagger-4">
             <CardHeader>
-              <CardTitle className="text-lg font-serif">Recent Errors</CardTitle>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-6 rounded-full" style={{ background: 'linear-gradient(180deg, hsl(0, 84%, 60%), hsl(0, 72%, 50%))' }} />
+                <div>
+                  <CardTitle className="text-base font-semibold text-foreground">Recent Errors</CardTitle>
+                  <p className="text-sm text-muted-foreground">Latest delivery failures</p>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[350px] overflow-y-auto no-scrollbar">
                 {errors?.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">No recent errors</p>
                 ) : (
                   errors?.map(err => (
                     <div key={err.id} className="flex flex-col gap-1 border-b pb-3 last:border-0 last:pb-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium truncate max-w-[150px]">{err.recipientEmail}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="status-dot status-dot-error" />
+                          <span className="text-sm font-medium truncate max-w-[150px] text-foreground">{err.recipientEmail}</span>
+                        </div>
                         <Badge variant="outline" className="text-[10px] scale-90 origin-right">{err.errorType}</Badge>
                       </div>
-                      <span className="text-xs text-muted-foreground truncate">{err.errorMessage}</span>
-                      <span className="text-[10px] text-muted-foreground">{new Date(err.createdAt).toLocaleString()} • {err.accountName}</span>
+                      <span className="text-xs text-muted-foreground truncate pl-4">{err.errorMessage}</span>
+                      <span className="text-[10px] text-muted-foreground pl-4">{new Date(err.createdAt).toLocaleString()} • {err.accountName}</span>
                     </div>
                   ))
                 )}
@@ -130,9 +172,15 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <Card>
+        <Card className="rounded-2xl animate-fade-in-up stagger-5">
           <CardHeader>
-            <CardTitle className="text-lg font-serif">Account Performance</CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="w-1 h-6 rounded-full" style={{ background: 'linear-gradient(180deg, hsl(142, 71%, 45%), hsl(142, 76%, 36%))' }} />
+              <div>
+                <CardTitle className="text-base font-semibold text-foreground">Account Performance</CardTitle>
+                <p className="text-sm text-muted-foreground">Breakdown by sender account</p>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
@@ -149,8 +197,8 @@ export default function Dashboard() {
               <TableBody>
                 {accountStats?.map(acc => (
                   <TableRow key={acc.accountId}>
-                    <TableCell className="font-medium text-sm">{acc.accountName}</TableCell>
-                    <TableCell className="text-sm">{acc.region}</TableCell>
+                    <TableCell className="font-medium text-sm text-foreground">{acc.accountName}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{acc.region}</TableCell>
                     <TableCell className="text-right text-sm">{acc.sent.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-destructive text-sm">{acc.failed.toLocaleString()}</TableCell>
                     <TableCell className="text-right text-sm">{acc.pending.toLocaleString()}</TableCell>
@@ -170,15 +218,17 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, variant = "default" }: { title: string, value: string | number, icon: any, variant?: "default" | "destructive" }) {
+function StatCard({ title, value, icon: Icon, variant = "default", iconClass = "stat-icon-indigo" }: { title: string, value: string | number, icon: any, variant?: "default" | "destructive", iconClass?: string }) {
   return (
-    <Card>
+    <Card className="card-hover rounded-2xl">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${variant === 'destructive' ? 'text-destructive' : 'text-muted-foreground'}`} />
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconClass}`}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl font-bold font-serif ${variant === 'destructive' ? 'text-destructive' : ''}`}>{value}</div>
+        <div className={`text-2xl font-bold ${variant === 'destructive' ? 'text-destructive' : 'text-foreground'}`}>{value}</div>
       </CardContent>
     </Card>
   );

@@ -3,8 +3,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 import { db, usersTable, emailLogsTable, accountsTable, templatesTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable } from "@workspace/db";
 import { eq, and, lte, sql, inArray } from "drizzle-orm";
-import nodemailer from "nodemailer";
-import { sendViaGmailApi, isGmailApiAvailable } from "@/lib/gmail-sender";
+import { sendViaGraphApi } from "@/lib/graph-sender";
+import { sendViaSmtp } from "@/lib/smtp-sender";
+import { broadcastStatusUpdate } from "@/lib/ws-server";
 import { decompressContent } from "@/lib/compression";
 import path from "node:path";
 import fs from "node:fs";
@@ -15,39 +16,38 @@ const MAX_EMAIL_SIZE_BYTES = 24.5 * 1024 * 1024;
 
 type NmAttachment = { filename: string; content: Buffer; contentType: string; originalSize?: number };
 
-const transporterCache = new Map<number, nodemailer.Transporter>();
+// Transporter cache removed (SMTP disabled)
 
-function getTransporter(accountRow: typeof accountsTable.$inferSelect): nodemailer.Transporter {
-  let transporter = transporterCache.get(accountRow.id);
-  if (!transporter) {
-    const isGmail = (accountRow.smtpHost || '').toLowerCase().includes('gmail.com');
-    transporter = nodemailer.createTransport({
-      host: accountRow.smtpHost,
-      port: accountRow.smtpPort,
-      secure: accountRow.smtpPort === 465,
-      auth: { user: accountRow.smtpUser, pass: accountRow.smtpPass },
-      ...(isGmail ? {} : { tls: { rejectUnauthorized: false } }),
-    });
-    transporterCache.set(accountRow.id, transporter);
-  }
-  return transporter;
+function styleLinksInHtml(html: string): string {
+  if (!html) return html;
+  return html.replace(/<a(\s[^>]*?)>/gi, (match, attrs) => {
+    if (/style=["']/i.test(attrs)) {
+      if (!/color\s*:/i.test(attrs)) {
+        return `<a${attrs.replace(/style=["']([^"']*)["']/i, 'style="color: #2563eb; text-decoration: underline; $1"')}>`;
+      }
+      return match;
+    } else {
+      return `<a style="color: #2563eb; text-decoration: underline;"${attrs}>`;
+    }
+  });
 }
 
 function buildCleanHtml(html: string, subject: string): string {
+  let processedHtml = html;
   if (html.toLowerCase().includes("<html") && html.toLowerCase().includes("<body")) {
-    return html;
-  }
-  let styles = "";
-  const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
-  let match;
-  let cleanHtml = html;
-  while ((match = styleRegex.exec(html)) !== null) {
-    styles += match[1] + "\n";
-  }
-  cleanHtml = cleanHtml.replace(styleRegex, "");
-  cleanHtml = cleanHtml.replace(/<meta[^>]*>/gi, "");
+    processedHtml = html;
+  } else {
+    let styles = "";
+    const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+    let match;
+    let cleanHtml = html;
+    while ((match = styleRegex.exec(html)) !== null) {
+      styles += match[1] + "\n";
+    }
+    cleanHtml = cleanHtml.replace(styleRegex, "");
+    cleanHtml = cleanHtml.replace(/<meta[^>]*>/gi, "");
 
-  return `<!DOCTYPE html>
+    processedHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -55,6 +55,7 @@ function buildCleanHtml(html: string, subject: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.7; margin: 0; padding: 0; }
+    a { color: #2563eb; text-decoration: underline; }
     ${styles}
   </style>
 </head>
@@ -62,6 +63,8 @@ function buildCleanHtml(html: string, subject: string): string {
   ${cleanHtml}
 </body>
 </html>`;
+  }
+  return styleLinksInHtml(processedHtml);
 }
 
 function cleanTextFallback(html: string): string {
@@ -84,17 +87,20 @@ function estimateMailSize(html: string, attachments: NmAttachment[]): number {
 
 function classifyError(err: Error): { errorType: "smtp_failed" | "invalid_email" | "blocked" | "limit_reached" | "auth_error" | "unknown"; message: string } {
   const msg = err.message.toLowerCase();
-  if (msg.includes("auth") || msg.includes("535") || msg.includes("530")) {
+  if (msg.includes("auth") || msg.includes("535") || msg.includes("530") || msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden")) {
     return { errorType: "auth_error", message: err.message };
   }
-  if (msg.includes("552") || msg.includes("size") || msg.includes("maxsize") || msg.includes("message size") || msg.includes("too large")) {
-    return { errorType: "limit_reached", message: "Email too large for Gmail (25MB limit). Remove large attachments." };
+  if (msg.includes("552") || msg.includes("size") || msg.includes("maxsize") || msg.includes("message size") || msg.includes("too large") || msg.includes("413")) {
+    return { errorType: "limit_reached", message: "Email too large. Remove large attachments." };
   }
-  if (msg.includes("limit") || msg.includes("quota") || msg.includes("550 5.7")) {
+  if (msg.includes("limit") || msg.includes("quota") || msg.includes("550 5.7") || msg.includes("429") || msg.includes("too many requests")) {
     return { errorType: "limit_reached", message: err.message };
   }
   if (msg.includes("block") || msg.includes("reject") || msg.includes("spam")) {
     return { errorType: "blocked", message: err.message };
+  }
+  if (msg.includes("invalid") || msg.includes("recipient") || msg.includes("not found")) {
+    return { errorType: "invalid_email", message: err.message };
   }
   return { errorType: "smtp_failed", message: err.message };
 }
@@ -218,10 +224,10 @@ export async function GET(req: Request) {
     try {
       console.log(`Processing email queue ID: ${pendingEmail.id} for ${pendingEmail.recipientEmail}`);
 
-      // Mark email as failed initially to prevent infinite loop
+      // Mark email as sending/in-progress initially without triggering failed state
       await db
         .update(emailLogsTable)
-        .set({ status: "failed", errorMessage: "Execution interrupted or serverless function timed out." })
+        .set({ errorMessage: "Outbound transmission in progress..." })
         .where(eq(emailLogsTable.id, pendingEmail.id));
 
       // 2. Fetch associated account
@@ -350,12 +356,8 @@ export async function GET(req: Request) {
         .where(eq(usersTable.email, account.email))
         .limit(1);
 
-      const attachments = await getUserAttachments(
-        associatedUser ? associatedUser.id : 0, 
-        pendingEmail.selectedCatalogIds
-      );
-
-      mailAttachments = [...attachments];
+      // Attachments are no longer sent (Google Drive link is on template)
+      mailAttachments = [];
       if (customBannerRow) {
         const bannerResult = await getAttachmentBuffer(customBannerRow.content);
         mailAttachments.push({
@@ -368,9 +370,9 @@ export async function GET(req: Request) {
       }
 
       // 6. Size guard verification
-      const estimatedSize = estimateMailSize(htmlWithSignature, attachments);
+      const estimatedSize = estimateMailSize(htmlWithSignature, mailAttachments);
       if (estimatedSize > MAX_EMAIL_SIZE_BYTES) {
-        const sizeMsg = `Email too large (~${Math.round(estimatedSize / 1024 / 1024)}MB). Gmail limit is 25MB. Remove large attachments.`;
+        const sizeMsg = `Email too large (~${Math.round(estimatedSize / 1024 / 1024)}MB). Remove large signature banner.`;
         await db
           .update(emailLogsTable)
           .set({ 
@@ -392,33 +394,30 @@ export async function GET(req: Request) {
       const cleanHtml = buildCleanHtml(htmlWithSignature, pendingEmail.subject);
       const textFallback = cleanTextFallback(htmlWithSignature);
 
-      // 7. Dispatch via Gmail API or SMTP Fallback
-      if (false && isGmailApiAvailable()) {
-        await sendViaGmailApi({
+      // 7. Dispatch via SMTP (preferred) or fall back to Microsoft Graph API
+      if (account.smtpHost && account.smtpUser && account.smtpPass) {
+        await sendViaSmtp({
+          smtpHost: account.smtpHost,
+          smtpPort: account.smtpPort || 465,
+          smtpUser: account.smtpUser,
+          smtpPass: account.smtpPass,
           fromEmail: account.email,
           fromName: account.name,
           to: toAddress,
           subject: pendingEmail.subject,
           html: cleanHtml,
           text: textFallback,
-          attachments: mailAttachments.map(a => ({
-            filename: (a as any).filename,
-            content: (a as any).content,
-            contentType: (a as any).contentType || (a as any).mimeType,
-            cid: (a as any).cid,
-          })),
-        } as any);
+          attachments: mailAttachments,
+        });
       } else {
-        const transporter = getTransporter(account);
-        await transporter.sendMail({
-          from: `"${account.name.replace(/"/g, '\\"')}" <${account.email}>`,
-          replyTo: account.email,
+        await sendViaGraphApi({
+          fromEmail: account.email,
+          fromName: account.name,
           to: toAddress,
           subject: pendingEmail.subject,
           html: cleanHtml,
           text: textFallback,
           attachments: mailAttachments,
-          xMailer: false
         });
       }
 
@@ -436,31 +435,106 @@ export async function GET(req: Request) {
       console.log(`Email successfully sent to ${pendingEmail.recipientEmail}`);
       results.push({ id: pendingEmail.id, status: "sent", recipient: pendingEmail.recipientEmail });
 
+      // Broadcast success status update via WebSocket
+      broadcastStatusUpdate({
+        type: "email_status_update",
+        data: {
+          id: pendingEmail.id,
+          status: "sent",
+          sentAt: new Date(),
+          errorMessage: null,
+        }
+      });
+
     } catch (err: unknown) {
       console.error(`Queue execution error for ID ${pendingEmail.id}:`, (err as Error).message);
-      // Update db with failure
+      
       try {
         const error = err as Error;
         const { errorType, message } = classifyError(error);
-        await db
-          .update(emailLogsTable)
-          .set({ 
-            status: "failed", 
-            errorType, 
-            errorMessage: message,
-            errorDetails: JSON.stringify({
-              rawError: error.message,
-              stack: error.stack,
-              method: "smtp",
-              attachmentCount: mailAttachments.length,
-              attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
-            }, null, 2)
-          })
-          .where(eq(emailLogsTable.id, pendingEmail.id));
+        
+        let retryCount = 0;
+        if (pendingEmail.errorDetails) {
+          try {
+            const details = JSON.parse(pendingEmail.errorDetails);
+            if (details && typeof details.retryCount === "number") {
+              retryCount = details.retryCount;
+            }
+          } catch (e) {}
+        }
+
+        const isRetryable = (errorType === "smtp_failed" || errorType === "unknown") && retryCount < 5;
+
+        if (isRetryable) {
+          const nextRetry = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
+          const updatedRetryCount = retryCount + 1;
+
+          await db
+            .update(emailLogsTable)
+            .set({ 
+              status: "pending", 
+              scheduledAt: nextRetry,
+              errorType, 
+              errorMessage: `${message} (Retry attempt ${updatedRetryCount}/5 scheduled)`,
+              errorDetails: JSON.stringify({
+                rawError: error.message,
+                stack: error.stack,
+                method: "smtp",
+                retryCount: updatedRetryCount,
+                attachmentCount: mailAttachments.length,
+                attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
+              }, null, 2)
+            })
+            .where(eq(emailLogsTable.id, pendingEmail.id));
+
+          results.push({ id: pendingEmail.id, status: "pending", error: `${message} (Scheduled retry ${updatedRetryCount}/5)` });
+
+          // Broadcast status update
+          broadcastStatusUpdate({
+            type: "email_status_update",
+            data: {
+              id: pendingEmail.id,
+              status: "pending",
+              sentAt: null,
+              errorMessage: `${message} (Retry ${updatedRetryCount}/5 scheduled)`,
+            }
+          });
+        } else {
+          // Hard failure or exceeded max retries
+          const finalMsg = retryCount >= 5 ? `Max retries exceeded: ${message}` : message;
+          await db
+            .update(emailLogsTable)
+            .set({ 
+              status: "failed", 
+              errorType, 
+              errorMessage: finalMsg,
+              errorDetails: JSON.stringify({
+                rawError: error.message,
+                stack: error.stack,
+                method: "smtp",
+                retryCount: retryCount,
+                attachmentCount: mailAttachments.length,
+                attachments: mailAttachments.map(a => ({ filename: (a as any).filename, contentType: (a as any).contentType, size: (a as any).originalSize ?? (a as any).content?.length }))
+              }, null, 2)
+            })
+            .where(eq(emailLogsTable.id, pendingEmail.id));
+
+          results.push({ id: pendingEmail.id, status: "failed", error: finalMsg });
+
+          // Broadcast failed status update via WebSocket
+          broadcastStatusUpdate({
+            type: "email_status_update",
+            data: {
+              id: pendingEmail.id,
+              status: "failed",
+              sentAt: null,
+              errorMessage: finalMsg,
+            }
+          });
+        }
       } catch (e: any) {
         console.error("Failed to write error to db:", e.message);
       }
-      results.push({ id: pendingEmail.id, status: "failed", error: (err as Error).message });
     }
   }
 
