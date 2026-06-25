@@ -132,144 +132,140 @@ export default function Compose() {
               {/* Grid split layout */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
                 
-                {/* Left Column - Campaign Logistics */}
-                <div className="lg:col-span-7 flex flex-col h-full">
-                  <Card className="rounded-2xl border border-slate-100 bg-white shadow-md overflow-hidden relative flex flex-col h-full flex-1">
-                    {/* Elegant top gradient accent line */}
-                    <div className="h-1.5 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-                    
-                    <CardHeader className="pb-4 pt-6">
-                      <CardTitle className="text-lg font-bold text-slate-800">Campaign Logistics</CardTitle>
-                      <CardDescription className="text-xs text-slate-400">Specify sender details, templates, and the email subject.</CardDescription>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-6 flex-1">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <FormField
-                          control={form.control}
-                          name="accountId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-bold uppercase text-slate-400 tracking-wider">Sender Account</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value ? field.value.toString() : undefined}>
-                                <FormControl>
-                                  <SelectTrigger className="rounded-xl border-slate-200 hover:border-slate-300 focus:ring-primary/20 h-11 bg-slate-50/50 hover:bg-slate-50 transition cursor-pointer">
-                                    <SelectValue placeholder="Select active sender..." />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="rounded-xl">
-                                  {accounts?.map(acc => (
-                                    <SelectItem key={acc.id} value={acc.id.toString()} className="cursor-pointer rounded-lg">
-                                      <div className="flex items-center justify-between w-full gap-4">
-                                        <span className="font-semibold text-slate-800">{acc.name}</span>
-                                        <Badge variant="outline" className="text-[9px] bg-slate-50 text-slate-500 font-medium py-0 h-4 border-slate-200">
-                                          {acc.region}
-                                        </Badge>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="templateId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs font-bold uppercase text-slate-400 tracking-wider">Email Template</FormLabel>
-                              <Select onValueChange={onTemplateChange} value={field.value ? field.value.toString() : undefined}>
-                                <FormControl>
-                                  <SelectTrigger className="rounded-xl border-slate-200 hover:border-slate-300 focus:ring-primary/20 h-11 bg-slate-50/50 hover:bg-slate-50 transition cursor-pointer">
-                                    <SelectValue placeholder="Select template..." />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent className="rounded-xl">
-                                  {templates?.map(t => (
-                                    <SelectItem key={t.id} value={t.id.toString()} className="cursor-pointer rounded-lg">
-                                      <span className="font-medium text-slate-800">{t.name}</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
+                {/* Left Column - D Trades International */}
+                <Card className="lg:col-span-7 rounded-2xl border border-slate-100 bg-white shadow-md overflow-hidden relative flex flex-col h-full">
+                  {/* Elegant top gradient accent line */}
+                  <div className="h-1.5 w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+                  
+                  <CardHeader className="pb-4 pt-6">
+                    <CardTitle className="text-lg font-bold text-slate-800">D Trades International</CardTitle>
+                    <CardDescription className="text-xs text-slate-400">Specify sender details, templates, and the email subject.</CardDescription>
+                  </CardHeader>
+                  
+                  <CardContent className="space-y-6 flex-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <FormField
                         control={form.control}
-                        name="subject"
+                        name="accountId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs font-bold uppercase text-slate-400 tracking-wider">Subject Line</FormLabel>
-                            <FormControl>
-                              <Input 
-                                placeholder="e.g. Premium Masala & Spices Export Catalog - D Trades" 
-                                className="rounded-xl border-slate-200 hover:border-slate-300 focus:ring-primary/20 h-11 bg-slate-50/50 hover:bg-slate-50 transition font-medium"
-                                {...field} 
-                              />
-                            </FormControl>
+                            <FormLabel className="text-xs font-bold uppercase text-slate-400 tracking-wider">Sender Account</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value ? field.value.toString() : undefined}>
+                              <FormControl>
+                                <SelectTrigger className="rounded-xl border-slate-200 hover:border-slate-300 focus:ring-primary/20 h-11 bg-slate-50/50 hover:bg-slate-50 transition cursor-pointer">
+                                  <SelectValue placeholder="Select active sender..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="rounded-xl">
+                                {accounts?.map(acc => (
+                                  <SelectItem key={acc.id} value={acc.id.toString()} className="cursor-pointer rounded-lg">
+                                    <div className="flex items-center justify-between w-full gap-4">
+                                      <span className="font-semibold text-slate-800">{acc.name}</span>
+                                      <Badge variant="outline" className="text-[9px] bg-slate-50 text-slate-500 font-medium py-0 h-4 border-slate-200">
+                                        {acc.region}
+                                      </Badge>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Right Column - Recipients Console */}
-                <div className="lg:col-span-5 flex flex-col h-full">
-                  <Card className="rounded-2xl border border-slate-100 bg-white shadow-md overflow-hidden flex flex-col h-full flex-1">
-                    <CardHeader className="pb-3 pt-6 flex flex-row items-center justify-between gap-4">
-                      <div>
-                        <CardTitle className="text-lg font-bold text-slate-800">Recipients List</CardTitle>
-                        <CardDescription className="text-xs text-slate-400">List client emails below (one per line).</CardDescription>
-                      </div>
-                      {recipientCount > 0 && (
-                        <Badge
-                          className="gap-1.5 text-xs text-white border-0 px-3 py-1 font-semibold rounded-full shadow-sm animate-scale-in shrink-0"
-                          style={{ background: 'linear-gradient(135deg, hsl(234, 85%, 58%), hsl(262, 83%, 58%))' }}
-                        >
-                          <Users className="h-3.5 w-3.5" />
-                          {recipientCount} Client{recipientCount !== 1 ? "s" : ""}
-                        </Badge>
-                      )}
-                    </CardHeader>
-                    
-                    <CardContent className="flex-1 flex flex-col space-y-4 pb-6">
-                      {/* Format Hint box */}
-                      <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-3 text-[11px] text-slate-500 leading-relaxed font-sans">
-                        <span className="font-bold text-slate-700">Supported Formats:</span>
-                        <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600 font-medium">
-                          <li><code className="text-indigo-600 font-mono">buyer@restaurant.com</code></li>
-                          <li><code className="text-indigo-600 font-mono">John Smith,john@wholesale.co.uk</code></li>
-                        </ul>
-                      </div>
 
                       <FormField
                         control={form.control}
-                        name="recipients"
+                        name="templateId"
                         render={({ field }) => (
-                          <FormItem className="flex-1 flex flex-col space-y-0">
-                            <FormControl className="flex-1">
-                              <Textarea
-                                placeholder={"buyer@restaurant.com\nJohn Smith,john@wholesale.co.uk\nRachel Green,rachel@grocer.com.au"}
-                                className="min-h-[220px] lg:min-h-[240px] font-mono text-xs resize-none rounded-xl border-slate-200 bg-slate-50/30 focus-within:bg-white focus:ring-primary/20 p-4 leading-relaxed flex-1"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage className="mt-1" />
+                          <FormItem>
+                            <FormLabel className="text-xs font-bold uppercase text-slate-400 tracking-wider">Email Template</FormLabel>
+                            <Select onValueChange={onTemplateChange} value={field.value ? field.value.toString() : undefined}>
+                              <FormControl>
+                                <SelectTrigger className="rounded-xl border-slate-200 hover:border-slate-300 focus:ring-primary/20 h-11 bg-slate-50/50 hover:bg-slate-50 transition cursor-pointer">
+                                  <SelectValue placeholder="Select template..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="rounded-xl">
+                                {templates?.map(t => (
+                                  <SelectItem key={t.id} value={t.id.toString()} className="cursor-pointer rounded-lg">
+                                    <span className="font-medium text-slate-800">{t.name}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="subject"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-bold uppercase text-slate-400 tracking-wider">Subject Line</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="e.g. Premium Masala & Spices Export Catalog - D Trades" 
+                              className="rounded-xl border-slate-200 hover:border-slate-300 focus:ring-primary/20 h-11 bg-slate-50/50 hover:bg-slate-50 transition font-medium"
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Right Column - Recipients Console */}
+                <Card className="lg:col-span-5 rounded-2xl border border-slate-100 bg-white shadow-md overflow-hidden flex flex-col h-full">
+                  <CardHeader className="pb-3 pt-6 flex flex-row items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-slate-800">Recipients List</CardTitle>
+                      <CardDescription className="text-xs text-slate-400">List client emails below (one per line).</CardDescription>
+                    </div>
+                    {recipientCount > 0 && (
+                      <Badge
+                        className="gap-1.5 text-xs text-white border-0 px-3 py-1 font-semibold rounded-full shadow-sm animate-scale-in shrink-0"
+                        style={{ background: 'linear-gradient(135deg, hsl(234, 85%, 58%), hsl(262, 83%, 58%))' }}
+                      >
+                        <Users className="h-3.5 w-3.5" />
+                        {recipientCount} Client{recipientCount !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                  </CardHeader>
+                  
+                  <CardContent className="flex-1 flex flex-col space-y-4 pb-6">
+                    {/* Format Hint box */}
+                    <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-3 text-[11px] text-slate-500 leading-relaxed font-sans">
+                      <span className="font-bold text-slate-700">Supported Formats:</span>
+                      <ul className="list-disc list-inside mt-1 space-y-0.5 text-slate-600 font-medium">
+                        <li><code className="text-indigo-600 font-mono">buyer@restaurant.com</code></li>
+                        <li><code className="text-indigo-600 font-mono">John Smith,john@wholesale.co.uk</code></li>
+                      </ul>
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name="recipients"
+                      render={({ field }) => (
+                        <FormItem className="flex-1 flex flex-col space-y-0">
+                          <FormControl className="flex-1">
+                            <Textarea
+                              placeholder={"buyer@restaurant.com\nJohn Smith,john@wholesale.co.uk\nRachel Green,rachel@grocer.com.au"}
+                              className="min-h-[220px] lg:min-h-[240px] font-mono text-xs resize-none rounded-xl border-slate-200 bg-slate-50/30 focus-within:bg-white focus:ring-primary/20 p-4 leading-relaxed flex-1"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage className="mt-1" />
+                        </FormItem>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
 
               </div>
 
