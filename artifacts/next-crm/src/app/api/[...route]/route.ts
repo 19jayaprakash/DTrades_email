@@ -51,11 +51,12 @@ const safeAccount = (a: any) => ({
 
 // Dynamic Catch-All Route Handler
 export async function GET(req: Request, { params }: { params: Promise<{ route: string[] }> }) {
-  const route = (await params).route;
-  const url = new URL(req.url);
-  const searchParams = url.searchParams;
+  try {
+    const route = (await params).route;
+    const url = new URL(req.url);
+    const searchParams = url.searchParams;
 
-  const authUser = await requireAuth(req);
+    const authUser = await requireAuth(req);
 
   // ── 1. AUTH ROUTES ──────────────────────────────────────────────────────────
   if (route[0] === "auth" && route[1] === "me") {
@@ -463,13 +464,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ route: s
   }
 
   return NextResponse.json({ error: "Endpoint not found" }, { status: 404 });
+  } catch (error: any) {
+    console.error("GET API ROUTE ERROR:", error);
+    return NextResponse.json({ 
+      error: "Internal Server Error", 
+      message: error?.message || String(error), 
+      stack: error?.stack 
+    }, { status: 500 });
+  }
 }
 
 // POST endpoint handler
 export async function POST(req: Request, { params }: { params: Promise<{ route: string[] }> }) {
-  const route = (await params).route;
-  const authUser = await requireAuth(req);
-  const body = await req.json().catch(() => ({}));
+  try {
+    const route = (await params).route;
+    const authUser = await requireAuth(req);
+    const body = await req.json().catch(() => ({}));
 
   // ── 1. AUTH / LOGIN ─────────────────────────────────────────────────────────
   if (route[0] === "auth" && route[1] === "login") {
@@ -814,6 +824,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ route: 
   }
 
   return NextResponse.json({ error: "Endpoint not found" }, { status: 404 });
+  } catch (error: any) {
+    console.error("POST API ROUTE ERROR:", error);
+    return NextResponse.json({ 
+      error: "Internal Server Error", 
+      message: error?.message || String(error), 
+      stack: error?.stack 
+    }, { status: 500 });
+  }
 }
 
 // PATCH endpoint handler
