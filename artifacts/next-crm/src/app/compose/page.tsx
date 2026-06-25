@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Send, Users } from "lucide-react";
+import { Loader2, Send, Users, Eye, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -70,6 +70,8 @@ export default function Compose() {
   };
 
   const recipientCount = form.watch("recipients").split("\n").filter(l => l.trim()).length;
+  const templateId = form.watch("templateId");
+  const selectedTemplate = templates?.find(t => t.id === templateId);
 
   const onSubmit = async (data: ComposeValues) => {
     try {
@@ -142,7 +144,7 @@ export default function Compose() {
                     <CardDescription className="text-xs text-slate-400">Specify sender details, templates, and the email subject.</CardDescription>
                   </CardHeader>
                   
-                  <CardContent className="space-y-6 flex-1">
+                  <CardContent className="space-y-6 flex-1 flex flex-col">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <FormField
                         control={form.control}
@@ -217,6 +219,51 @@ export default function Compose() {
                         </FormItem>
                       )}
                     />
+
+                    {/* Template Live Preview Section */}
+                    <div className="flex-1 flex flex-col min-h-[220px] space-y-2">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5" /> Template Live Preview
+                      </span>
+                      
+                      {selectedTemplate ? (
+                        <div className="border border-slate-100 bg-slate-50/50 p-2 rounded-xl flex-1 flex flex-col min-h-0 shadow-inner">
+                          <iframe
+                            srcDoc={`
+                              <!DOCTYPE html>
+                              <html>
+                                <head>
+                                  <style>
+                                    body {
+                                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                                      margin: 12px;
+                                      color: #334155;
+                                      font-size: 13px;
+                                      line-height: 1.5;
+                                    }
+                                  </style>
+                                </head>
+                                <body>
+                                  ${selectedTemplate.htmlContent || selectedTemplate.textContent || '<p style="color: #94a3b8; font-style: italic;">No body content</p>'}
+                                </body>
+                              </html>
+                            `}
+                            title="Template Preview"
+                            className="w-full flex-1 rounded-lg bg-white border border-slate-100/80 shadow-sm"
+                          />
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-slate-200 bg-slate-50/30 rounded-xl flex-1 flex flex-col items-center justify-center p-6 text-center transition-colors">
+                          <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                            <Mail className="h-5 w-5 text-slate-400" />
+                          </div>
+                          <span className="text-xs font-semibold text-slate-500">No template selected</span>
+                          <span className="text-[10px] text-slate-400 mt-1 max-w-[240px]">
+                            Choose an email template from the dropdown above to preview the newsletter or outreach layout here.
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
 
