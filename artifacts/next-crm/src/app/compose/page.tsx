@@ -235,16 +235,44 @@ export default function Compose() {
                                 <head>
                                   <style>
                                     body {
-                                      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                                      margin: 12px;
-                                      color: #334155;
-                                      font-size: 13px;
-                                      line-height: 1.5;
+                                      font-family: Arial, sans-serif;
+                                      font-size: 14px;
+                                      color: #2d2d2d;
+                                      line-height: 1.7;
+                                      margin: 0;
+                                      padding: 0;
+                                      background-color: #f8fafc;
+                                    }
+                                    a {
+                                      color: #2563eb;
+                                      text-decoration: underline;
+                                    }
+                                    .email-container {
+                                      max-width: 680px;
+                                      width: 100%;
+                                      margin: 0 auto;
+                                      background-color: #ffffff;
+                                      border: 1px solid #e2e8f0;
+                                      border-radius: 8px;
+                                      padding: 32px 24px;
+                                      box-sizing: border-box;
+                                      text-align: left;
+                                    }
+                                    .wrapper-table {
+                                      width: 100%;
+                                      background-color: #f8fafc;
+                                      margin: 0;
+                                      padding: 20px 16px;
+                                      box-sizing: border-box;
                                     }
                                   </style>
                                 </head>
                                 <body>
-                                  ${selectedTemplate.htmlContent || selectedTemplate.textContent || '<p style="color: #94a3b8; font-style: italic;">No body content</p>'}
+                                  <div class="wrapper-table">
+                                    <div class="email-container">
+                                      \${selectedTemplate.htmlContent || selectedTemplate.textContent || '<p style="color: #94a3b8; font-style: italic;">No body content</p>'}
+                                    </div>
+                                  </div>
                                 </body>
                               </html>
                             `}

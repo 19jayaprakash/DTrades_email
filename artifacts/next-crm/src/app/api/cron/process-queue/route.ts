@@ -54,13 +54,32 @@ function buildCleanHtml(html: string, subject: string): string {
   <title>${subject}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.7; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 14px; color: #2d2d2d; line-height: 1.7; margin: 0; padding: 0; background-color: #f8fafc; }
     a { color: #2563eb; text-decoration: underline; }
+    .email-container { max-width: 680px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; }
     ${styles}
   </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
-  ${cleanHtml}
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8fafc; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; width: 100% !important; min-width: 100%; margin: 0; padding: 0;">
+    <tr>
+      <td align="center" style="padding: 20px 16px;">
+        <!--[if mso]>
+        <table align="center" border="0" cellspacing="0" cellpadding="0" width="680">
+          <tr>
+            <td align="left" valign="top" width="680">
+        <![endif]-->
+        <div class="email-container" style="max-width: 680px; width: 100%; margin: 0 auto; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; text-align: left; padding: 32px 24px; box-sizing: border-box;">
+          ${cleanHtml}
+        </div>
+        <!--[if mso]>
+            </td>
+          </tr>
+        </table>
+        <![endif]-->
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
   }
