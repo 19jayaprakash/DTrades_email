@@ -270,7 +270,7 @@ export default function Compose() {
                                 <body>
                                   <div class="wrapper-table">
                                     <div class="email-container">
-                                      \${selectedTemplate.htmlContent || selectedTemplate.textContent || '<p style="color: #94a3b8; font-style: italic;">No body content</p>'}
+                                      ${selectedTemplate.htmlContent || selectedTemplate.textContent || '<p style="color: #94a3b8; font-style: italic;">No body content</p>'}
                                     </div>
                                   </div>
                                 </body>
