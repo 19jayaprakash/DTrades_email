@@ -33,6 +33,7 @@ export async function sendViaSmtp(opts: {
     tls: {
       rejectUnauthorized: false, // Don't fail on invalid/self-signed certs (common for VPS)
     },
+    name: opts.smtpHost, // Use SMTP host as the HELO/EHLO hostname to improve deliverability
   });
 
   const mailOptions = {
