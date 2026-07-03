@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import { ImapFlow } from "imapflow";
+import MailComposer from "nodemailer/lib/mail-composer";
 
 export type SmtpAttachment = {
   filename: string;
@@ -47,5 +49,34 @@ export async function sendViaSmtp(opts: {
     })),
   };
 
+  // Send the email via SMTP first
   await transporter.sendMail(mailOptions);
+
+  // Sync to IMAP Sent folder in the background (wrapped in try-catch to avoid breaking success state)
+  try {
+    const imap = new ImapFlow({
+      host: opts.smtpHost,
+      port: 993, // default secure IMAP port
+      secure: true,
+      auth: {
+        user: opts.smtpUser,
+        pass: opts.smtpPass,
+      },
+      logger: false,
+    });
+
+    await imap.connect();
+    const mailboxes = await imap.list();
+    const sentMailbox = mailboxes.find(m => m.name.toLowerCase().includes("sent"))?.path || "Sent";
+
+    const composer = new MailComposer(mailOptions);
+    const messageBuffer = await composer.compile().build();
+
+    await imap.append(sentMailbox, messageBuffer, ["\\Seen"]);
+    await imap.logout();
+    console.log(`[IMAP Sync] Successfully copied sent email to ${sentMailbox} for ${opts.smtpUser}`);
+  } catch (imapErr) {
+    console.error(`[IMAP Sync] Failed to copy sent email to Sent folder for ${opts.smtpUser}:`, imapErr);
+  }
 }
+

@@ -120,7 +120,7 @@ export async function sendViaGraphApi(opts: {
       ],
       attachments: formattedAttachments,
     },
-    saveToSentItems: "true",
+    saveToSentItems: true,
   };
 
   const url = `https://graph.microsoft.com/v1.0/users/${opts.fromEmail}/sendMail`;
