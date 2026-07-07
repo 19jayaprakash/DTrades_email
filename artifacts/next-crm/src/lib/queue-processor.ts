@@ -1,6 +1,6 @@
 import { db, usersTable, emailLogsTable, accountsTable, templatesTable, attachmentsTable, userAttachmentsTable, attachmentContentsTable } from "@workspace/db";
 import { eq, and, lte, sql, inArray } from "drizzle-orm";
-import { sendViaGraphApi } from "@/lib/graph-sender";
+import { sendViaGraphApi, isGraphApiAvailable } from "@/lib/graph-sender";
 import { sendViaSmtp } from "@/lib/smtp-sender";
 import { broadcastStatusUpdate } from "@/lib/ws-server";
 import { decompressContent } from "@/lib/compression";
@@ -428,15 +428,25 @@ export async function processQueue() {
           attachments: mailAttachments,
         });
       } else {
-        await sendViaGraphApi({
-          fromEmail: account.email,
-          fromName: account.name,
-          to: toAddress,
-          subject: pendingEmail.subject,
-          html: cleanHtml,
-          text: textFallback,
-          attachments: mailAttachments,
-        });
+        if (isGraphApiAvailable()) {
+          await sendViaGraphApi({
+            fromEmail: account.email,
+            fromName: account.name,
+            to: toAddress,
+            subject: pendingEmail.subject,
+            html: cleanHtml,
+            text: textFallback,
+            attachments: mailAttachments,
+          });
+        } else {
+          const missingFields = [];
+          if (!account.smtpHost) missingFields.push("SMTP Host");
+          if (!account.smtpUser) missingFields.push("SMTP User");
+          if (!account.smtpPass) missingFields.push("SMTP Password");
+          throw new Error(
+            `SMTP settings are incomplete (missing ${missingFields.join(", ")}), and Microsoft Graph API is not configured on this server.`
+          );
+        }
       }
 
       // Update database log on success!

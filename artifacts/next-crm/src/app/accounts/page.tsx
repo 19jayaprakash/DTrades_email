@@ -21,6 +21,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const accountSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -52,6 +53,7 @@ export default function Accounts() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const [provider, setProvider] = useState<string>("custom");
 
   const form = useForm<AccountFormValues>({
     resolver: zodResolver(accountSchema),
@@ -68,6 +70,35 @@ export default function Accounts() {
       signature: "",
     }
   });
+
+  // Watch email field to sync with SMTP User for specific providers
+  const emailValue = form.watch("email");
+  useEffect(() => {
+    if (provider === "outlook" || provider === "office365" || provider === "gmail") {
+      form.setValue("smtpUser", emailValue);
+    }
+  }, [emailValue, provider]);
+
+  const handleProviderChange = (val: string) => {
+    setProvider(val);
+    if (val === "outlook") {
+      form.setValue("smtpHost", "smtp-mail.outlook.com");
+      form.setValue("smtpPort", 587);
+      form.setValue("smtpUser", form.getValues("email"));
+    } else if (val === "office365") {
+      form.setValue("smtpHost", "smtp.office365.com");
+      form.setValue("smtpPort", 587);
+      form.setValue("smtpUser", form.getValues("email"));
+    } else if (val === "gmail") {
+      form.setValue("smtpHost", "smtp.gmail.com");
+      form.setValue("smtpPort", 465);
+      form.setValue("smtpUser", form.getValues("email"));
+    } else {
+      // custom
+      form.setValue("smtpHost", "mail.dtradesinternational.in");
+      form.setValue("smtpPort", 465);
+    }
+  };
 
   useEffect(() => {
     if (user && user.role !== "admin") {
@@ -119,6 +150,16 @@ export default function Accounts() {
 
   const openEdit = (acc: any) => {
     setEditingId(acc.id);
+    let detectedProvider = "custom";
+    if (acc.smtpHost === "smtp-mail.outlook.com") {
+      detectedProvider = "outlook";
+    } else if (acc.smtpHost === "smtp.office365.com") {
+      detectedProvider = "office365";
+    } else if (acc.smtpHost === "smtp.gmail.com") {
+      detectedProvider = "gmail";
+    }
+    setProvider(detectedProvider);
+
     form.reset({
       name: acc.name,
       email: acc.email,
@@ -136,6 +177,7 @@ export default function Accounts() {
 
   const openCreate = () => {
     setEditingId(null);
+    setProvider("custom");
     form.reset({
       name: "",
       email: "",
@@ -190,6 +232,44 @@ export default function Accounts() {
 
                   <div className="border-t pt-4 my-2">
                     <h3 className="text-sm font-semibold text-slate-800 mb-3">SMTP Settings</h3>
+                    
+                    <div className="mb-4">
+                      <FormLabel className="text-xs font-semibold text-slate-600 block mb-1">Email Provider Preset</FormLabel>
+                      <Select value={provider} onValueChange={handleProviderChange}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select provider preset" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="custom">Custom SMTP / VPS (e.g. mail.dtradesinternational.in)</SelectItem>
+                          <SelectItem value="outlook">Outlook / Hotmail (Personal - smtp-mail.outlook.com)</SelectItem>
+                          <SelectItem value="office365">Office 365 / Microsoft 365 (smtp.office365.com)</SelectItem>
+                          <SelectItem value="gmail">Gmail (smtp.gmail.com)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      {provider === "outlook" && (
+                        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md">
+                          <strong>Microsoft App Password Required:</strong> Microsoft personal accounts require 
+                          you to enable <strong>2-Step Verification</strong> and use an <strong>App Password</strong> as 
+                          the SMTP Password here. Your regular Outlook password will be rejected.
+                        </div>
+                      )}
+                      {provider === "office365" && (
+                        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md">
+                          <strong>Office 365 SMTP Auth Note:</strong> Microsoft 365 accounts require 
+                          <strong>SMTP AUTH</strong> to be enabled for this mailbox in the Microsoft 365 Admin Center, 
+                          and you may need to use an <strong>App Password</strong> if Multi-Factor Authentication (MFA) is active.
+                        </div>
+                      )}
+                      {provider === "gmail" && (
+                        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md">
+                          <strong>Gmail App Password Required:</strong> Google requires you to enable 
+                          <strong>2-Step Verification</strong> on your Google Account and generate an 
+                          <strong>App Password</strong> to use as the SMTP Password here.
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={form.control} name="smtpHost" render={({ field }) => (
                         <FormItem>

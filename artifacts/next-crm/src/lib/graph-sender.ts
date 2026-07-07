@@ -55,12 +55,16 @@ async function getAccessToken(): Promise<string> {
   return cachedToken;
 }
 
-/** Returns true if Microsoft Graph credentials are configured */
+/** Returns true if Microsoft Graph credentials are configured and not placeholders */
 export function isGraphApiAvailable(): boolean {
+  const tenantId = process.env.MICROSOFT_TENANT_ID;
+  const clientId = process.env.MICROSOFT_CLIENT_ID;
+  const clientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+
   return !!(
-    process.env.MICROSOFT_TENANT_ID &&
-    process.env.MICROSOFT_CLIENT_ID &&
-    process.env.MICROSOFT_CLIENT_SECRET
+    tenantId && !tenantId.includes("placeholder") && !tenantId.includes("your_tenant") &&
+    clientId && !clientId.includes("placeholder") && !clientId.includes("your_client_id") &&
+    clientSecret && !clientSecret.includes("placeholder") && !clientSecret.includes("your_client_secret")
   );
 }
 
